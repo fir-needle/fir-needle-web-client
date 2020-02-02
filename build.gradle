@@ -1,0 +1,64 @@
+plugins {
+    id 'java'
+}
+
+group = projectGroup
+version = projectVersion
+sourceCompatibility = projectSourceCompatibility
+targetCompatibility = projectSourceCompatibility
+
+subprojects {
+    apply plugin: 'java'
+}
+
+allprojects {
+    apply plugin: 'checkstyle'
+
+    repositories {
+        mavenCentral()
+    }
+
+    dependencies {
+        checkstyle 'com.puppycrawl.tools:checkstyle:8.25'
+        implementation 'io.netty:netty-all:4.1.36.Final'
+    }
+
+    checkstyle {
+        toolVersion = '8.25'
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    testCompile group: 'org.junit.jupiter', name: 'junit-jupiter-engine', version: '5.5.2'
+
+    implementation('org.fir.needle:fir-needle-joint') {
+        version {
+            branch = 'master'
+        }
+    }
+}
+
+jar {
+    manifest {
+        attributes 'Implementation-Title': projectName,
+                'Implementation-Version': projectVersion,
+                'Implementation-Vendor' : projectAuthor
+    }
+}
+
+javadoc {
+    title = "<h1>$projectName</h1>"
+    options.bottom = "<i>Copyright &#169; 2019 $projectAuthor.</i>"
+    if (JavaVersion.current() == JavaVersion.VERSION_1_10) {
+        options.addBooleanOption 'html5', true
+    }
+}
+
+wrapper {
+    gradleVersion = '4.10.2'
+    distributionType = 'ALL'
+}
