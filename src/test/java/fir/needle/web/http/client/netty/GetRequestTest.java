@@ -23,6 +23,15 @@
  */
 package fir.needle.web.http.client.netty;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+
 import fir.needle.joint.io.ByteArea;
 import fir.needle.web.SilentTestLogger;
 import fir.needle.web.http.client.Get;
@@ -30,14 +39,6 @@ import fir.needle.web.http.client.SingleConnectSingleDisconnectAdapter;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.HttpResponseStatus;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.CountDownLatch;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class GetRequestTest {
     private static final String METHOD = "GET";
@@ -80,14 +81,10 @@ class GetRequestTest {
             assertEquals(originalRequest, echoServer.receivedMessage);
             assertEquals(echoServer.sentMessage, listener.serverResponse.toString());
 
+            echoServer.join();
         } catch (final InterruptedException e) {
             echoServer.interrupt();
-        } finally {
-            try {
-                echoServer.join();
-            } catch (final InterruptedException e) {
-                echoServer.interrupt();
-            }
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -129,14 +126,10 @@ class GetRequestTest {
             assertEquals(originalRequest, echoServer.receivedMessage);
             assertEquals(echoServer.sentMessage, listener.serverResponse.toString());
 
+            echoServer.join();
         } catch (final InterruptedException e) {
             echoServer.interrupt();
-        } finally {
-            try {
-                echoServer.join();
-            } catch (final InterruptedException e) {
-                echoServer.interrupt();
-            }
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -188,14 +181,10 @@ class GetRequestTest {
             assertEquals(originalRequest, echoServer.receivedMessage);
             assertEquals(expectedEvents, listener.receivedEvents);
 
+            echoServer.join();
         } catch (final InterruptedException e) {
             echoServer.interrupt();
-        } finally {
-            try {
-                echoServer.join();
-            } catch (final InterruptedException e) {
-                echoServer.interrupt();
-            }
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -255,14 +244,10 @@ class GetRequestTest {
             assertEquals(originalRequest, echoServer.receivedMessage);
             assertEquals(expectedEvents, listener.receivedEvents);
 
+            echoServer.join();
         } catch (final InterruptedException e) {
             echoServer.interrupt();
-        } finally {
-            try {
-                echoServer.join();
-            } catch (final InterruptedException e) {
-                echoServer.interrupt();
-            }
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -320,14 +305,10 @@ class GetRequestTest {
             assertEquals(originalRequest, echoServer.receivedMessage);
             assertEquals(expectedEvents, listener.receivedEvents);
 
+            echoServer.join();
         } catch (final InterruptedException e) {
             echoServer.interrupt();
-        } finally {
-            try {
-                echoServer.join();
-            } catch (final InterruptedException e) {
-                echoServer.interrupt();
-            }
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -404,14 +385,11 @@ class GetRequestTest {
             parsingCompleteSignal.await();
 
             assertEquals(expectedEvents, listener.receivedEvents);
+
+            echoServer.join();
         } catch (final InterruptedException e) {
             echoServer.interrupt();
-        } finally {
-            try {
-                echoServer.join();
-            } catch (final InterruptedException e) {
-                echoServer.interrupt();
-            }
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -492,14 +470,11 @@ class GetRequestTest {
             parsingCompleteSignal.await();
 
             assertEquals(expectedEvents, listener.receivedEvents);
+
+            echoServer.join();
         } catch (final InterruptedException e) {
             echoServer.interrupt();
-        } finally {
-            try {
-                echoServer.join();
-            } catch (final InterruptedException e) {
-                echoServer.interrupt();
-            }
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -555,7 +530,7 @@ class GetRequestTest {
         }
 
         @Override
-        protected void onConnect(final Get request) {
+        protected void onDoConnected(final Get request) {
             receivedEvents.addOnConnected(request.method(), request.path(), request.query());
             this.request = request;
         }
@@ -596,12 +571,12 @@ class GetRequestTest {
         }
 
         @Override
-        public void onDisconnectedByError(final Get request, final String reason) {
+        protected void onDoDisconnectedByError(final Get request, final String reason) {
             receivedEvents.addOnDisconnectedByError(request.method(), request.path(), request.query(), reason);
         }
 
         @Override
-        protected void onDisconnect(final Get request) {
+        protected void onDoDisconnected(final Get request) {
             receivedEvents.addOnDisconnected(request.method(), request.path(), request.query());
             parsingCompleteSignal.countDown();
         }
@@ -638,8 +613,8 @@ class GetRequestTest {
         }
 
         @Override
-        protected void onConnect(final Get request) {
-            super.onConnect(request);
+        protected void onDoConnected(final Get request) {
+            super.onDoConnected(request);
             throw new IllegalStateException("Exception in onConnected");
         }
 

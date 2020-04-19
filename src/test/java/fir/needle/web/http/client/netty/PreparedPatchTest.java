@@ -235,7 +235,7 @@ class PreparedPatchTest {
         }
 
         @Override
-        protected void onConnect(final Patch request) {
+        protected void onDoConnected(final Patch request) {
             receivedEvents.addOnConnected(request.method(), request.path(), request.query());
             this.request = request;
         }
@@ -271,7 +271,7 @@ class PreparedPatchTest {
         }
 
         @Override
-        protected void onDisconnect(final Patch request) {
+        protected void onDoDisconnected(final Patch request) {
             receivedEvents.addOnDisconnected(request.method(), request.path(), request.query());
             parsingCompleteSignal.countDown();
         }

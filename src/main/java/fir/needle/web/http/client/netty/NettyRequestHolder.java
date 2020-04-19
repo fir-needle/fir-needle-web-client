@@ -23,6 +23,7 @@
  */
 package fir.needle.web.http.client.netty;
 
+import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 
 interface NettyRequestHolder extends NettyHttpRequest {
@@ -35,7 +36,7 @@ interface NettyRequestHolder extends NettyHttpRequest {
 
     Channel channel();
 
-    void channel(Channel channel);
+    void connect(Bootstrap bootstrap);
 
     void setCancelIsDone();
 }

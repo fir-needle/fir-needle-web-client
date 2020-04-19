@@ -23,6 +23,7 @@
  */
 package fir.needle.web.http.client.netty;
 
+import fir.needle.joint.logging.Logger;
 import fir.needle.web.http.client.HttpResponseListener;
 import fir.needle.web.http.client.NoBodyRequestBuilder;
 import fir.needle.web.http.client.PreparableRequestsFactory;
@@ -30,9 +31,12 @@ import fir.needle.web.http.client.PreparedDelete;
 import fir.needle.web.http.client.PreparedPatch;
 import fir.needle.web.http.client.PreparedPost;
 import fir.needle.web.http.client.PreparedPut;
-import io.netty.handler.codec.http.*;
+import io.netty.handler.codec.http.DefaultHttpHeaders;
+import io.netty.handler.codec.http.HttpHeaders;
+import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.HttpVersion;
 
-class RequestBuilder<P extends NoBodyRequestBuilder> implements PreparableRequestsFactory {
+public class RequestBuilder<P extends NoBodyRequestBuilder> implements PreparableRequestsFactory {
 
     HttpVersion httpVersion = HttpVersion.HTTP_1_1;
     HttpMethod httpMethod;
@@ -49,6 +53,8 @@ class RequestBuilder<P extends NoBodyRequestBuilder> implements PreparableReques
 
     NettyHttpClient client;
     PreparedRequestsChain chain;
+
+    Logger logger;
 
     public P withHttpVersion(final String httpVersion) {
         this.httpVersion = HttpVersion.valueOf(httpVersion);
@@ -156,6 +162,11 @@ class RequestBuilder<P extends NoBodyRequestBuilder> implements PreparableReques
 
     P withRepeatPeriodMs(final int repeatPeriodMs) {
         this.repeatPeriodMs = repeatPeriodMs;
+        return (P) this;
+    }
+
+    P withLogger(final Logger logger) {
+        this.logger = logger;
         return (P) this;
     }
 }

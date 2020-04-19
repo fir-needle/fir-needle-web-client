@@ -23,7 +23,6 @@
  */
 package fir.needle.web.http.client.netty;
 
-
 import fir.needle.joint.io.ByteAppendable;
 import fir.needle.joint.io.ByteArea;
 import fir.needle.web.http.client.HttpRequest;

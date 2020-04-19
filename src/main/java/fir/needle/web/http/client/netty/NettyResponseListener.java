@@ -23,7 +23,6 @@
  */
 package fir.needle.web.http.client.netty;
 
-
 import fir.needle.joint.io.ByteArea;
 
 interface NettyResponseListener {

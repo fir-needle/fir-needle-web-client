@@ -23,19 +23,21 @@
  */
 package fir.needle.web.http.client.netty;
 
+import java.nio.charset.Charset;
+import java.util.List;
+import java.util.Map;
+
 import fir.needle.joint.logging.Logger;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
+import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpObject;
+import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.handler.timeout.ReadTimeoutException;
-
-import java.nio.charset.Charset;
-import java.util.List;
-import java.util.Map;
 
 class HttpNotificationHandler extends SimpleChannelInboundHandler<HttpObject> {
     private final NettyRequestHolder requestHolder;
@@ -111,7 +113,22 @@ class HttpNotificationHandler extends SimpleChannelInboundHandler<HttpObject> {
                             " in the channel " + ctx.channel().id() + " and in the thread " + Thread.currentThread());
         }
 
-        ctx.channel().writeAndFlush(requestHolder.get());
+        if (requestHolder.isCanceled()) {
+            ctx.close();
+            return;
+        }
+
+        final HttpRequest crtHttpRequest = requestHolder.get();
+        if (logger.isTraceEnabled()) {
+            logger.trace(
+                    getClass().getSimpleName() + ".channelActive sending request" +
+                            ctx.channel().remoteAddress() + ", " + requestHolder.relativeUrl() +
+                            " in the channel " + ctx.channel().id() + " and in the thread " + Thread.currentThread() +
+                            ":\n" + crtHttpRequest +
+                            "\n\n" + new String(((DefaultFullHttpRequest) crtHttpRequest).content().array()));
+        }
+
+        ctx.channel().writeAndFlush(crtHttpRequest);
 
         wasConnectionEstablished = true;
 

@@ -71,8 +71,8 @@ public class NettyPreparedPost extends RequestBuilder<NettyPreparedPost> impleme
 
     @Override
     public ByteAppendable withBody(final CharSequence contentType, final int contentLength) {
-        this.headers.add(HttpHeaderNames.CONTENT_TYPE, contentType);
-        this.headers.add(HttpHeaderNames.CONTENT_LENGTH, contentLength);
+        headers.add(HttpHeaderNames.CONTENT_TYPE, contentType);
+        headers.add(HttpHeaderNames.CONTENT_LENGTH, contentLength);
 
         body = new NettyOutputByteBuffer(Unpooled.buffer(contentLength));
 

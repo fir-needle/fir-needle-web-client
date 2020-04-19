@@ -34,7 +34,7 @@ public abstract class SingleConnectSingleDisconnectListener<R extends HttpReques
     @Override
     public final void onConnected(final R request) {
         if (state < CONNECTED) {
-            onConnect(request);
+            onDoConnected(request);
             state = CONNECTED;
         }
     }
@@ -42,14 +42,22 @@ public abstract class SingleConnectSingleDisconnectListener<R extends HttpReques
     @Override
     public final void onDisconnected(final R request) {
         if (state != DISCONNECTED) {
-            onDisconnect(request);
+            onDoDisconnected(request);
             state = DISCONNECTED;
         }
     }
 
-    protected abstract void onConnect(R request);
+    @Override
+    public final void onDisconnectedByError(final R request, final String reason) {
+        if (state != DISCONNECTED) {
+            onDoDisconnectedByError(request, reason);
+            state = DISCONNECTED;
+        }
+    }
 
-    protected abstract void onDisconnect(R request);
+    protected abstract void onDoConnected(R request);
 
-    protected abstract void onDisconnectByError(R request, String reason);
+    protected abstract void onDoDisconnected(R request);
+
+    protected abstract void onDoDisconnectedByError(R request, String reason);
 }

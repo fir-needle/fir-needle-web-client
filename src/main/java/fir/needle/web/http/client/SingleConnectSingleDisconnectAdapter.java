@@ -29,7 +29,7 @@ public class SingleConnectSingleDisconnectAdapter<R extends HttpRequest> extends
         SingleConnectSingleDisconnectListener<R> {
 
     @Override
-    protected void onConnect(final R request) {
+    protected void onDoConnected(final R request) {
         //
     }
 
@@ -69,17 +69,12 @@ public class SingleConnectSingleDisconnectAdapter<R extends HttpRequest> extends
     }
 
     @Override
-    public void onDisconnectedByError(final R request, final String reason) {
+    protected void onDoDisconnected(final R request) {
         //
     }
 
     @Override
-    protected void onDisconnect(final R request) {
-        //
-    }
-
-    @Override
-    protected void onDisconnectByError(final R request, final String reason) {
+    protected void onDoDisconnectedByError(final R request, final String reason) {
         //
     }
 }
