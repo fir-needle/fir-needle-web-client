@@ -345,7 +345,7 @@ class PreparedPutTest {
         }
 
         @Override
-        protected void onConnect(final Put request) {
+        protected void onDoConnected(final Put request) {
             receivedEvents.addOnConnected(request.method(), request.path(), request.query());
             this.request = request;
         }
@@ -381,7 +381,7 @@ class PreparedPutTest {
         }
 
         @Override
-        protected void onDisconnect(final Put request) {
+        protected void onDoDisconnected(final Put request) {
             receivedEvents.addOnDisconnected(request.method(), request.path(), request.query());
             parsingCompleteSignal.countDown();
         }

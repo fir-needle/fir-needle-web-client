@@ -23,7 +23,22 @@
  */
 package fir.needle.web.http.client.netty;
 
+import java.io.File;
+import java.io.UncheckedIOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+
+import javax.net.ssl.SSLException;
+
 import fir.needle.joint.lang.Cancelable;
+import fir.needle.joint.lang.Future;
+import fir.needle.joint.lang.VoidResult;
 import fir.needle.joint.logging.JulLogger;
 import fir.needle.joint.logging.Logger;
 import fir.needle.web.http.client.Get;
@@ -51,16 +66,10 @@ import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.timeout.ReadTimeoutHandler;
 
-import javax.net.ssl.SSLException;
-import java.io.File;
-import java.io.UncheckedIOException;
-import java.util.*;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
-
 
 public final class NettyHttpClient implements HttpClient {
+    final EventLoopGroup eventLoopGroup;
+
     private final String host;
     private final int port;
     private final SslContext sslContext;
@@ -71,7 +80,6 @@ public final class NettyHttpClient implements HttpClient {
     final int reconnectAttemptsNumber;
 
     private final boolean isInternalEventLoopGroup;
-    private final EventLoopGroup eventLoopGroup;
 
     private final List<Cancelable> scheduledTasks = new ArrayList<>();
     private final List<Long> scheduleIds = new CopyOnWriteArrayList<>();
@@ -209,7 +217,8 @@ public final class NettyHttpClient implements HttpClient {
     public void close() throws InterruptedException {
         if (logger.isTraceEnabled()) {
             logger.trace(
-                    getClass().getSimpleName() + ".close has started for " + getRequestUrl(null) + " in thread" +
+                    getClass().getSimpleName() + ".close has started for " +
+                            getRequestUrl(null) + " in thread" +
                             Thread.currentThread());
         }
 
@@ -224,25 +233,42 @@ public final class NettyHttpClient implements HttpClient {
             copy = new ArrayList<>(scheduledTasks);
         }
 
+        final ArrayList<Future<VoidResult>> toSync = new ArrayList<>();
         for (final Cancelable scheduledRequest : copy) {
             try {
-                scheduledRequest.cancel();
+                toSync.add(scheduledRequest.cancel());
             } catch (final Exception e) {
                 logger.error("Error while canceling scheduled request", e);
             }
         }
 
-        if (isInternalEventLoopGroup) {
-            eventLoopGroup.shutdownGracefully(0, 0, TimeUnit.MILLISECONDS).sync();
-        }
+        try {
+            for (final Future<VoidResult> crtFuture : toSync) {
+                crtFuture.sync();
+            }
+        } catch (final InterruptedException ex) {
+            Thread.currentThread().interrupt();
+        } finally {
+            try {
+                if (isInternalEventLoopGroup) {
+                    eventLoopGroup.shutdownGracefully(0, 0, TimeUnit.MILLISECONDS).sync();
+                    return;
+                }
 
-        if (logger.isInfoEnabled()) {
-            logger.info("Client for " + getRequestUrl(null) + " was closed!");
+                if (Thread.currentThread().isInterrupted()) { // if was interrupted in crtFuture
+                    throw new InterruptedException();
+                }
+            } finally {
+                if (logger.isInfoEnabled()) {
+                    logger.info("Client for " + getRequestUrl(null) + " was closed!");
+                }
+            }
         }
     }
 
     NettyPreparedGet createPreparedGet(final String path, final String query) {
         return new NettyPreparedGet()
+                .withLogger(logger)
                 .withClient(this)
                 .withHost(host)
                 .withHttpVersion(HttpVersion.HTTP_1_1)
@@ -253,6 +279,7 @@ public final class NettyHttpClient implements HttpClient {
 
     NettyPreparedPost createPreparedPost(final String path, final String query) {
         return new NettyPreparedPost()
+                .withLogger(logger)
                 .withClient(this)
                 .withHost(host)
                 .withHttpVersion(HttpVersion.HTTP_1_1)
@@ -263,6 +290,7 @@ public final class NettyHttpClient implements HttpClient {
 
     NettyPreparedPut createPreparedPut(final String path, final String query) {
         return new NettyPreparedPut()
+                .withLogger(logger)
                 .withClient(this)
                 .withHost(host)
                 .withHttpVersion(HttpVersion.HTTP_1_1)
@@ -273,6 +301,7 @@ public final class NettyHttpClient implements HttpClient {
 
     NettyPreparedDelete createPreparedDelete(final String path, final String query) {
         return new NettyPreparedDelete()
+                .withLogger(logger)
                 .withClient(this)
                 .withHost(host)
                 .withHttpVersion(HttpVersion.HTTP_1_1)
@@ -283,6 +312,7 @@ public final class NettyHttpClient implements HttpClient {
 
     NettyPreparedPatch createPreparedPatch(final String path, final String query) {
         return new NettyPreparedPatch()
+                .withLogger(logger)
                 .withClient(this)
                 .withHost(host)
                 .withHttpVersion(HttpVersion.HTTP_1_1)
@@ -494,10 +524,12 @@ public final class NettyHttpClient implements HttpClient {
                                     " in the channel " + requestHolder.channel().id() + " and in the thread " +
                                     Thread.currentThread());
                 }
+
+                requestHolder.setCancelIsDone();
                 return;
             }
 
-            requestHolder.channel(bootstrap.connect().channel());
+            requestHolder.connect(bootstrap);
         }
 
         void fillPipeline(final SocketChannel channel) {

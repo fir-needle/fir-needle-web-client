@@ -23,11 +23,11 @@
  */
 package fir.needle.web.http.client.netty;
 
+import java.util.concurrent.TimeUnit;
+
 import fir.needle.joint.logging.Logger;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
-
-import java.util.concurrent.TimeUnit;
 
 class ReconnectHandler extends ChannelInboundHandlerAdapter {
     private final Runnable reconnectTask;
@@ -60,6 +60,7 @@ class ReconnectHandler extends ChannelInboundHandlerAdapter {
 
     @Override
     public void channelUnregistered(final ChannelHandlerContext ctx) {
+
         if (logger.isTraceEnabled()) {
             logger.trace(
                     getClass().getSimpleName() + ".channelUnregistered for " +

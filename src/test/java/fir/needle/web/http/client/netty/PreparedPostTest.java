@@ -235,7 +235,7 @@ class PreparedPostTest {
         }
 
         @Override
-        protected void onConnect(final Post request) {
+        protected void onDoConnected(final Post request) {
             receivedEvents.addOnConnected(request.method(), request.path(), request.query());
             this.request = request;
         }
@@ -271,7 +271,7 @@ class PreparedPostTest {
         }
 
         @Override
-        protected void onDisconnect(final Post request) {
+        protected void onDoDisconnected(final Post request) {
             receivedEvents.addOnDisconnected(request.method(), request.path(), request.query());
             parsingCompleteSignal.countDown();
         }

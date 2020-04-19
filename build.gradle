@@ -42,6 +42,14 @@ dependencies {
     }
 }
 
+test {
+    useJUnitPlatform()
+    testLogging {
+        showStandardStreams = true
+        exceptionFormat = 'full'
+    }
+}
+
 jar {
     manifest {
         attributes 'Implementation-Title': projectName,

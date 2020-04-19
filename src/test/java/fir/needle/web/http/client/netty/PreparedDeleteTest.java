@@ -23,6 +23,15 @@
  */
 package fir.needle.web.http.client.netty;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+
 import fir.needle.joint.io.ByteArea;
 import fir.needle.web.SilentTestLogger;
 import fir.needle.web.http.client.Delete;
@@ -31,14 +40,6 @@ import fir.needle.web.http.client.SingleConnectSingleDisconnectAdapter;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.HttpResponseStatus;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.CountDownLatch;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class PreparedDeleteTest {
     private static final int PORT = 8080;
@@ -100,14 +101,10 @@ class PreparedDeleteTest {
             assertEquals(originalRequest, echoServer.receivedMessage);
             assertEquals(echoServer.sentMessage, listener.serverResponse.toString());
 
+            echoServer.join();
         } catch (final InterruptedException e) {
             echoServer.interrupt();
-        } finally {
-            try {
-                echoServer.join();
-            } catch (final InterruptedException e) {
-                echoServer.interrupt();
-            }
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -171,14 +168,10 @@ class PreparedDeleteTest {
             assertEquals(originalRequest, echoServer.receivedMessage);
             assertEquals(expectedEvents, listener.receivedEvents);
 
+            echoServer.join();
         } catch (final InterruptedException e) {
             echoServer.interrupt();
-        } finally {
-            try {
-                echoServer.join();
-            } catch (final InterruptedException e) {
-                echoServer.interrupt();
-            }
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -234,7 +227,7 @@ class PreparedDeleteTest {
         }
 
         @Override
-        protected void onConnect(final Delete request) {
+        protected void onDoConnected(final Delete request) {
             receivedEvents.addOnConnected(request.method(), request.path(), request.query());
             this.request = request;
         }
@@ -270,7 +263,7 @@ class PreparedDeleteTest {
         }
 
         @Override
-        protected void onDisconnect(final Delete request) {
+        protected void onDoDisconnected(final Delete request) {
             receivedEvents.addOnDisconnected(request.method(), request.path(), request.query());
             parsingCompleteSignal.countDown();
         }

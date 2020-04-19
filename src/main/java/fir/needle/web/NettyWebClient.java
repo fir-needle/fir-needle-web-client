@@ -23,15 +23,18 @@
  */
 package fir.needle.web;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
+
 import fir.needle.joint.lang.Cancelable;
+import fir.needle.joint.lang.Future;
+import fir.needle.joint.lang.NoWaitFuture;
+import fir.needle.joint.lang.VoidResult;
 import fir.needle.web.http.client.netty.NettyHttpClient;
 import fir.needle.web.websocket.client.netty.NettyWebSocketClient;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 public class NettyWebClient implements AutoCloseable {
     private static final int DEFAULT_NUMBER_OF_WORKER_THREADS = 1;
@@ -141,8 +144,6 @@ public class NettyWebClient implements AutoCloseable {
     }
 
     private class HttpClientBuilder extends NettyHttpClient.NettyHttpClientBuilder {
-
-        @Override
         public NettyHttpClient build(final String host, final int port) {
             final NettyHttpClient result = super.build(host, port);
 
@@ -169,8 +170,10 @@ public class NettyWebClient implements AutoCloseable {
         }
 
         @Override
-        public void cancel() {
+        public Future<VoidResult> cancel() {
             isCanceled = true;
+
+            return NoWaitFuture.INSTANCE;
         }
 
         @Override

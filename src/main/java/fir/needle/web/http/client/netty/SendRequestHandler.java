@@ -23,13 +23,14 @@
  */
 package fir.needle.web.http.client.netty;
 
+import java.util.concurrent.TimeUnit;
+
 import fir.needle.joint.logging.Logger;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
+import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.HttpRequest;
-
-import java.util.concurrent.TimeUnit;
 
 class SendRequestHandler extends SimpleChannelInboundHandler<Boolean> {
     private final NettyRequestHolder requestHolder;
@@ -87,9 +88,11 @@ class SendRequestHandler extends SimpleChannelInboundHandler<Boolean> {
 
             if (logger.isTraceEnabled()) {
                 logger.trace(
-                        getClass().getSimpleName() + " resending request " + requestHolder.relativeUrl() + " for " +
-                                ctx.channel().remoteAddress() + "in the channel " + ctx.channel().id() +
-                                " and in the thread " + Thread.currentThread());
+                        getClass().getSimpleName() + ".channelRead0 sending request" +
+                                ctx.channel().remoteAddress() + ", " + requestHolder.relativeUrl() +
+                                " in the channel " + ctx.channel().id() + " and in the thread " +
+                                Thread.currentThread() + ":\n" + requestToSend +
+                                "\n\n" + new String(((DefaultFullHttpRequest) requestToSend).content().array()));
             }
 
             final ChannelFuture channelFuture = ctx.channel().writeAndFlush(requestToSend);

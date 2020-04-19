@@ -23,33 +23,43 @@
  */
 package fir.needle.web.http.client.netty;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import fir.needle.joint.io.ByteArea;
 import fir.needle.joint.lang.Cancelable;
+import fir.needle.joint.lang.Future;
+import fir.needle.joint.lang.NoWaitFuture;
+import fir.needle.joint.lang.VoidResult;
+import fir.needle.joint.logging.Logger;
 import fir.needle.web.http.client.HttpRequest;
 import fir.needle.web.http.client.UpdatableNoBodyRequest;
+import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
-
-import java.util.concurrent.atomic.AtomicBoolean;
+import io.netty.channel.EventLoopGroup;
+import io.netty.util.concurrent.EventExecutor;
 
 abstract class AbstractScheduledRequest<R extends HttpRequest & UpdatableNoBodyRequest> extends AbstractRequest<R>
         implements NettyRequestHolder, Cancelable {
 
+    private final EventLoopGroup eventLoopGroup;
+    private final Object lock = new Object();
+
     long scheduledId;
 
-    private AtomicBoolean isCanceled = new AtomicBoolean(false);
+    private final AtomicBoolean isCanceled = new AtomicBoolean(false);
     private volatile boolean isCancelDone;
-    private int repeatPeriodMs;
+    private final int repeatPeriodMs;
+    private final Logger logger;
 
-    private Channel channel;
-    private Thread callingThread;
-
-    private final Object lock = new Object();
+    private volatile Channel channel;
 
     AbstractScheduledRequest(final RequestBuilder builder) {
         super(builder);
 
         this.repeatPeriodMs = builder.repeatPeriodMs;
         this.scheduledId = builder.scheduledId;
+        this.logger = builder.logger;
+        this.eventLoopGroup = builder.client.eventLoopGroup;
     }
 
     @Override
@@ -138,21 +148,49 @@ abstract class AbstractScheduledRequest<R extends HttpRequest & UpdatableNoBodyR
     }
 
     @Override
-    public void cancel() throws InterruptedException {
-        isCanceled.set(true);
-        client.cancelScheduledRequest(this);
-
-        if (isCancelDone) {
-            return;
+    public Future<VoidResult> cancel() {
+        if (logger.isTraceEnabled()) {
+            logger.trace(getClass().getSimpleName() + ".cancel was called from the thread " + Thread.currentThread());
         }
 
-        if (Thread.currentThread() != callingThread) {
-            synchronized (lock) {
-                while (!isCancelDone) {
-                    lock.wait();
-                }
+        eventLoopGroup.execute(() -> {
+            if (logger.isTraceEnabled()) {
+                logger.trace(getClass().getSimpleName() + ".cancel canceling scheduled request" +
+                        " in the thread " + Thread.currentThread());
+            }
+
+            isCanceled.set(true);
+            client.cancelScheduledRequest(this);
+        });
+
+        for (final EventExecutor eventExecutor : eventLoopGroup) {
+            if (eventExecutor.inEventLoop()) {
+                return NoWaitFuture.INSTANCE;
             }
         }
+
+        if (logger.isTraceEnabled()) {
+            logger.trace(getClass().getSimpleName() + ".cancel was called not from eventLoop thread ");
+        }
+
+        return new Future<VoidResult>() {
+            @Override
+            public VoidResult sync() throws InterruptedException {
+                synchronized (lock) {
+                    while (!isCancelDone) {
+                        lock.wait();
+                    }
+                }
+
+                if (logger.isTraceEnabled()) {
+                    logger.trace(
+                            getClass().getSimpleName() + ".cancel was finished and thread " + Thread.currentThread() +
+                                    " has left wait");
+                }
+
+                return VoidResult.NO_ERROR_RESULT;
+            }
+        };
     }
 
     @Override
@@ -176,13 +214,28 @@ abstract class AbstractScheduledRequest<R extends HttpRequest & UpdatableNoBodyR
     }
 
     @Override
-    public void channel(final Channel channel) {
-        this.channel = channel;
-        this.callingThread = Thread.currentThread();
+    public void connect(final Bootstrap bootstrap) {
+        if (isCanceled.get()) {
+            setCancelIsDone();
+            return;
+        }
+
+        this.channel = bootstrap.connect().channel();
+        this.isCancelDone = false;
+
+        if (logger.isTraceEnabled()) {
+            logger.trace(getClass().getSimpleName() + ".channel finish setting channel into scheduled request " +
+                    " in the thread " + Thread.currentThread());
+        }
     }
 
     @Override
     public void setCancelIsDone() {
+        if (logger.isTraceEnabled()) {
+            logger.trace(getClass().getSimpleName() + ".setCancelIsDone verified scheduled request cancel " +
+                    " in the thread " + Thread.currentThread());
+        }
+
         isCancelDone = true;
 
         synchronized (lock) {

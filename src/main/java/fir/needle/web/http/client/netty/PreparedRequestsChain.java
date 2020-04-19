@@ -23,14 +23,18 @@
  */
 package fir.needle.web.http.client.netty;
 
-import fir.needle.joint.io.ByteArea;
-import fir.needle.joint.lang.Cancelable;
-import io.netty.channel.Channel;
-import io.netty.handler.codec.http.HttpRequest;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import fir.needle.joint.io.ByteArea;
+import fir.needle.joint.lang.Cancelable;
+import fir.needle.joint.lang.Future;
+import fir.needle.joint.lang.NoWaitFuture;
+import fir.needle.joint.lang.VoidResult;
+import io.netty.bootstrap.Bootstrap;
+import io.netty.channel.Channel;
+import io.netty.handler.codec.http.HttpRequest;
 
 class PreparedRequestsChain implements NettyRequestHolder, NettyResponseListener, Cancelable {
     private static final long ZERO_DELAY = 0;
@@ -106,8 +110,8 @@ class PreparedRequestsChain implements NettyRequestHolder, NettyResponseListener
     }
 
     @Override
-    public void channel(final Channel channel) {
-        this.channel = channel;
+    public void connect(final Bootstrap bootstrap) {
+        this.channel = bootstrap.connect().channel();
     }
 
     @Override
@@ -193,7 +197,8 @@ class PreparedRequestsChain implements NettyRequestHolder, NettyResponseListener
     }
 
     @Override
-    public void cancel() {
+    public Future<VoidResult> cancel() {
         isCanceled.set(true);
+        return NoWaitFuture.INSTANCE;
     }
 }
