@@ -4,4 +4,5 @@
         "http://www.puppycrawl.com/dtds/suppressions_1_0.dtd">
 <suppressions>
     <!--suppress files="xxx.java|yyy.java" checks="MethodLength|FallThrough"/-->
+    <suppress files="NettyWebSocketClientTest.java" checks="MethodLength" />
 </suppressions>

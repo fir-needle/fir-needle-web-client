@@ -35,6 +35,11 @@ public class SingleConnectSingleDisconnectAdapter extends SingleConnectSingleDis
     }
 
     @Override
+    public void onBeforeOpen(final WebSocketHandShaker handShaker) {
+
+    }
+
+    @Override
     public void onPing(final ByteArea message, final long startIndex, final long length) {
 
     }
@@ -57,13 +62,22 @@ public class SingleConnectSingleDisconnectAdapter extends SingleConnectSingleDis
     }
 
     @Override
+    public void onCloseFrame(final CharArea message, final long startIndex, final long length, final int statusCode) {
+
+    }
+
+    @Override
     public void onListenerError(final Throwable error) {
 
     }
 
     @Override
-    protected void onClose(final WebSocket webSocket, final CharArea message, final long startIndex, final long length,
-            final int statusCode) {
+    protected void onClose(final WebSocket webSocket) {
+
+    }
+
+    @Override
+    protected void onCloseByError(final WebSocket webSocket, final AbstractWebSocketClientException error) {
 
     }
 }

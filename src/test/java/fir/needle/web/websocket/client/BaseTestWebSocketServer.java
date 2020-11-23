@@ -108,7 +108,6 @@ abstract class BaseTestWebSocketServer extends Thread {
                     acceptNextConnection = true;
                 } catch (final Exception e) {
                     e.printStackTrace();
-                    return;
                 } finally {
                     try {
                         in.close();

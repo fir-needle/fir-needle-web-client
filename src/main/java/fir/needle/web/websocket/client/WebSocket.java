@@ -23,11 +23,11 @@
  */
 package fir.needle.web.websocket.client;
 
-
 import fir.needle.joint.io.ByteArea;
 import fir.needle.joint.io.CharArea;
+import fir.needle.joint.lang.Closeable;
 
-public interface WebSocket extends AutoCloseable {
+public interface WebSocket extends Closeable {
 
     void sendBinary(ByteArea message, long startIndex, long length);
 
@@ -48,8 +48,6 @@ public interface WebSocket extends AutoCloseable {
     void sendPong(String message);
 
     void sendPong(ByteArea message, long startIndex, long length);
-
-    void close();
 
     void close(int statusCode, String message, int closeTimeoutMs);
 

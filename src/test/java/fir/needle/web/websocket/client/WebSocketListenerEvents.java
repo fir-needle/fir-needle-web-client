@@ -39,6 +39,11 @@ public class WebSocketListenerEvents {
         return events.isEmpty();
     }
 
+    WebSocketListenerEvents addOnBeforeOpen() {
+        events.add(new OnBeforeOpen());
+        return this;
+    }
+
     WebSocketListenerEvents addOnOpened(final String path, final String query) {
         events.add(new OnOpened(path, query));
         return this;
@@ -62,9 +67,15 @@ public class WebSocketListenerEvents {
     }
 
     WebSocketListenerEvents addOnTextFrame(final CharArea message, final long startIndex, final long length,
-                                           final boolean isFinalFragment) {
+            final boolean isFinalFragment) {
 
         events.add(new OnTextFrame(message, startIndex, length, isFinalFragment));
+        return this;
+    }
+
+    WebSocketListenerEvents addOnCloseFrame(final CharArea message, final long startIndex, final long length,
+            final int statusCode) {
+        events.add(new OnCloseFrame(message, startIndex, length, statusCode));
         return this;
     }
 
@@ -73,9 +84,14 @@ public class WebSocketListenerEvents {
         return this;
     }
 
-    WebSocketListenerEvents addOnClosed(final String path, final String query, final CharArea message,
-            final long startIndex, final long length, final int statusCode) {
-        events.add(new OnClosed(path, query, message, startIndex, length, statusCode));
+    WebSocketListenerEvents addOnClosed(final String path, final String query) {
+        events.add(new OnClosed(path, query));
+        return this;
+    }
+
+    WebSocketListenerEvents addOnClosedByError(final String path, final String query,
+            final AbstractWebSocketClientException exception) {
+        events.add(new OnClosedByError(path, query, exception));
         return this;
     }
 
@@ -97,7 +113,23 @@ public class WebSocketListenerEvents {
         return super.hashCode();
     }
 
-    private final class OnOpened {
+    private static final class OnBeforeOpen {
+        @Override
+        public int hashCode() {
+            return super.hashCode();
+        }
+
+        @Override
+        public boolean equals(final Object obj) {
+            if (this == obj) {
+                return true;
+            }
+
+            return obj != null && getClass() == obj.getClass();
+        }
+    }
+
+    private static final class OnOpened {
         private final String path;
         private final String query;
 
@@ -126,7 +158,7 @@ public class WebSocketListenerEvents {
         }
     }
 
-    private final class OnPing {
+    private static final class OnPing {
         private final byte[] buffer;
 
         private OnPing(final ByteArea message, final long startIndex, final long length) {
@@ -156,7 +188,7 @@ public class WebSocketListenerEvents {
         }
     }
 
-    private final class OnPong {
+    private static final class OnPong {
         private final byte[] buffer;
 
         private OnPong(final ByteArea message, final long startIndex, final long length) {
@@ -186,7 +218,7 @@ public class WebSocketListenerEvents {
         }
     }
 
-    private final class OnBinaryFrame {
+    private static final class OnBinaryFrame {
         private final byte[] buffer;
         private final boolean isFinalFragment;
 
@@ -221,7 +253,7 @@ public class WebSocketListenerEvents {
         }
     }
 
-    private final class OnTextFrame {
+    private static final class OnTextFrame {
         private final char[] buffer;
         private final boolean isFinalFragment;
 
@@ -256,7 +288,42 @@ public class WebSocketListenerEvents {
         }
     }
 
-    private final class OnListenerError {
+    private static final class OnCloseFrame {
+        private final char[] buffer;
+        private final int statusCode;
+
+        private OnCloseFrame(final CharArea message, final long startIndex, final long length,
+                final int statusCode) {
+
+            this.buffer = new char[(int) length];
+            this.statusCode = statusCode;
+
+            for (long i = startIndex; i < startIndex + length; i++) {
+                this.buffer[(int) (i - startIndex)] = message.getChar(i);
+            }
+        }
+
+        @Override
+        public boolean equals(final Object obj) {
+            if (this == obj) {
+                return true;
+            }
+
+            if (!(obj != null && getClass() == obj.getClass())) {
+                return false;
+            }
+
+            final OnCloseFrame o = (OnCloseFrame) obj;
+            return Arrays.equals(buffer, o.buffer) && statusCode == o.statusCode;
+        }
+
+        @Override
+        public int hashCode() {
+            return super.hashCode();
+        }
+    }
+
+    private static final class OnListenerError {
         private final Throwable throwable;
 
         private OnListenerError(final Throwable throwable) {
@@ -284,23 +351,13 @@ public class WebSocketListenerEvents {
         }
     }
 
-    private final class OnClosed {
+    private static final class OnClosed {
         private final String path;
         private final String query;
-        private final char[] buffer;
-        private final int statusCode;
 
-        private OnClosed(final String path, final String query, final CharArea message, final long startIndex,
-                final long length, final int statusCode) {
-
+        private OnClosed(final String path, final String query) {
             this.path = path;
             this.query = query;
-            this.buffer = new char[(int) length];
-
-            for (long i = 0; i < length; i++) {
-                this.buffer[(int) i] = message.getChar(i + startIndex);
-            }
-            this.statusCode = statusCode;
         }
 
         @Override
@@ -315,13 +372,44 @@ public class WebSocketListenerEvents {
 
             final OnClosed o = (OnClosed) obj;
             return path.equals(o.path) &&
-                    (query == null && o.query == null || query != null && query.equals(o.query)) &&
-                    Arrays.equals(buffer, o.buffer) && statusCode == o.statusCode;
+                    (query == null && o.query == null || query != null && query.equals(o.query));
         }
 
         @Override
         public int hashCode() {
             return super.hashCode();
+        }
+    }
+
+    private static final class OnClosedByError {
+        private final String path;
+        private final String query;
+        private final AbstractWebSocketClientException exception;
+
+        private OnClosedByError(final String path, final String query,
+                final AbstractWebSocketClientException exception) {
+            this.path = path;
+            this.query = query;
+            this.exception = exception;
+        }
+
+        @Override
+        public boolean equals(final Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (o == null || getClass() != o.getClass()) {
+                return false;
+            }
+            final OnClosedByError that = (OnClosedByError) o;
+            return path.equals(that.path) &&
+                    (query == null && that.query == null ||
+                            query != null && query.equals(that.query) && exception.equals(that.exception));
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(path, query, exception);
         }
     }
 }

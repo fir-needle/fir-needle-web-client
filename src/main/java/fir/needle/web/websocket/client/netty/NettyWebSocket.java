@@ -25,26 +25,36 @@ package fir.needle.web.websocket.client.netty;
 
 import fir.needle.joint.io.ByteArea;
 import fir.needle.joint.io.CharArea;
+import fir.needle.joint.io.CharSequenceToCharArea;
+import fir.needle.joint.lang.Future;
+import fir.needle.joint.lang.NoWaitFuture;
+import fir.needle.joint.lang.VoidResult;
+import fir.needle.joint.logging.Logger;
 import fir.needle.web.http.client.netty.NettyInputByteBuffer;
 import fir.needle.web.websocket.client.WebSocket;
+import fir.needle.web.websocket.client.WebSocketHandShaker;
 import fir.needle.web.websocket.client.WebSocketListener;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelFutureListener;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.websocketx.*;
+import io.netty.util.concurrent.EventExecutor;
 
 import java.net.URISyntaxException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-class NettyWebSocket implements WebSocket {
+class NettyWebSocket implements WebSocket, WebSocketHandShaker {
     private static final int DEFAULT_RCV = 0;
     private static final boolean LAST_FRAME = true;
     private static final int NORMAL_CLOSURE_STATUS_CODE = 1000;
     private static final String NORMAL_CLOSURE_MESSAGE = "Normal closure";
 
+    final HttpHeaders handshakeHeaders;
     final WebSocketListener listener;
+    final Logger logger;
 
     private final NettyWebSocketClient client;
 
@@ -55,9 +65,11 @@ class NettyWebSocket implements WebSocket {
 
     private final Runnable connectTask;
     private final AtomicBoolean isClosed = new AtomicBoolean(false);
+    private final AtomicBoolean isCloseDone = new AtomicBoolean(false);
+    private final Object lock = new Object();
 
-    private int attemptsToReconnectLeft;
-    private Channel channel;
+    private volatile int attemptsToReconnectLeft;
+    private volatile Channel channel;
     private boolean isFragmentedMessage;
     private boolean isCurrentFragmentedMessageBinary;
 
@@ -67,18 +79,27 @@ class NettyWebSocket implements WebSocket {
         this.client = client;
         this.path = path;
         this.query = query;
+        this.handshakeHeaders = handshakeHeaders;
         this.listener = listener;
+        this.logger = client.logger;
 
         this.url = (client.sslContext == null ? "ws" : "wss") + "://" + client.host + ':' + client.port + path +
-                (query == null ? "" : '?' + query);
+                           (query == null ? "" : '?' + query);
 
         this.attemptsToReconnectLimit = client.numberOfReconnectAttempts;
         this.attemptsToReconnectLeft = client.numberOfReconnectAttempts;
-        this.connectTask = new ConnectTask(client, this, handshakeHeaders);
+        this.connectTask = new ConnectTask(client, this, listener, logger);
     }
 
     @Override
     public void sendBinary(final ByteArea message, final long startIndex, final long length) {
+        if (logger.isTraceEnabled()) {
+            logger.trace(
+                    getClass().getSimpleName() + ".sendBinary for " + this.url() + " in the channel " +
+                            channel.id() + " and in the thread " + Thread.currentThread());
+
+        }
+
         if (isClosed.get()) {
             throw new IllegalStateException("Is closed");
         }
@@ -89,6 +110,13 @@ class NettyWebSocket implements WebSocket {
 
     @Override
     public void sendText(final CharArea message, final long startIndex, final long length) {
+        if (logger.isTraceEnabled()) {
+            logger.trace(
+                    getClass().getSimpleName() + ".sendText for " + this.url() + " in the channel " +
+                            channel.id() + " and in the thread " + Thread.currentThread());
+
+        }
+
         if (isClosed.get()) {
             throw new IllegalStateException("Is closed");
         }
@@ -100,6 +128,13 @@ class NettyWebSocket implements WebSocket {
     @Override
     public void sendBinary(final ByteArea message, final long startIndex, final long length,
             final boolean isFinalFragment) {
+        if (logger.isTraceEnabled()) {
+            logger.trace(
+                    getClass().getSimpleName() + ".sendBinary for " + this.url() + " in the channel " +
+                            channel.id() + " and in the thread " + Thread.currentThread());
+
+        }
+
         if (isClosed.get()) {
             throw new IllegalStateException("Is closed");
         }
@@ -130,6 +165,12 @@ class NettyWebSocket implements WebSocket {
     @Override
     public void sendText(final CharArea message, final long startIndex, final long length,
             final boolean isFinalFragment) {
+        if (logger.isTraceEnabled()) {
+            logger.trace(
+                    getClass().getSimpleName() + ".sendText for " + this.url() + " in the channel " +
+                            channel.id() + " and in the thread " + Thread.currentThread());
+
+        }
 
         if (isClosed.get()) {
             throw new IllegalStateException("Is closed");
@@ -160,6 +201,13 @@ class NettyWebSocket implements WebSocket {
 
     @Override
     public void sendPing() {
+        if (logger.isTraceEnabled()) {
+            logger.trace(
+                    getClass().getSimpleName() + ".sendPing for " + this.url() + " in the channel " +
+                            channel.id() + " and in the thread " + Thread.currentThread());
+
+        }
+
         if (isClosed.get()) {
             throw new IllegalStateException("Is closed");
         }
@@ -169,6 +217,13 @@ class NettyWebSocket implements WebSocket {
 
     @Override
     public void sendPing(final String message) {
+        if (logger.isTraceEnabled()) {
+            logger.trace(
+                    getClass().getSimpleName() + ".sendPing for " + this.url() + " in the channel " +
+                            channel.id() + " and in the thread " + Thread.currentThread());
+
+        }
+
         if (isClosed.get()) {
             throw new IllegalStateException("Is closed");
         }
@@ -178,6 +233,13 @@ class NettyWebSocket implements WebSocket {
 
     @Override
     public void sendPing(final ByteArea message, final long startIndex, final long length) {
+        if (logger.isTraceEnabled()) {
+            logger.trace(
+                    getClass().getSimpleName() + ".sendPing for " + this.url() + " in the channel " +
+                            channel.id() + " and in the thread " + Thread.currentThread());
+
+        }
+
         if (isClosed.get()) {
             throw new IllegalStateException("Is closed");
         }
@@ -188,6 +250,13 @@ class NettyWebSocket implements WebSocket {
 
     @Override
     public void sendPong() {
+        if (logger.isTraceEnabled()) {
+            logger.trace(
+                    getClass().getSimpleName() + ".sendPong for " + this.url() + " in the channel " +
+                            channel.id() + " and in the thread " + Thread.currentThread());
+
+        }
+
         if (isClosed.get()) {
             throw new IllegalStateException("Is closed");
         }
@@ -197,6 +266,13 @@ class NettyWebSocket implements WebSocket {
 
     @Override
     public void sendPong(final String message) {
+        if (logger.isTraceEnabled()) {
+            logger.trace(
+                    getClass().getSimpleName() + ".sendPong for " + this.url() + " in the channel " +
+                            channel.id() + " and in the thread " + Thread.currentThread());
+
+        }
+
         if (isClosed.get()) {
             throw new IllegalStateException("Is closed");
         }
@@ -206,6 +282,13 @@ class NettyWebSocket implements WebSocket {
 
     @Override
     public void sendPong(final ByteArea message, final long startIndex, final long length) {
+        if (logger.isTraceEnabled()) {
+            logger.trace(
+                    getClass().getSimpleName() + ".sendPong for " + this.url() + " in the channel " +
+                            channel.id() + " and in the thread " + Thread.currentThread());
+
+        }
+
         if (isClosed.get()) {
             throw new IllegalStateException("Is closed");
         }
@@ -215,45 +298,102 @@ class NettyWebSocket implements WebSocket {
     }
 
     @Override
-    public void close() {
-        close(NORMAL_CLOSURE_STATUS_CODE, NORMAL_CLOSURE_MESSAGE, NettyWebSocketClient.DEFAULT_CLOSE_TIMEOUT_MS);
+    public Future<VoidResult> closeAsync() {
+        if (logger.isTraceEnabled()) {
+            logger.trace(
+                    getClass().getSimpleName() + ".closeAsync for " + this.url() + " in the channel " +
+                            channel.id() + " and in the thread " + Thread.currentThread());
+        }
+
+        for (final EventExecutor eventExecutor : client.eventLoopGroup) {
+            if (eventExecutor.inEventLoop()) {
+                close(NORMAL_CLOSURE_STATUS_CODE, NORMAL_CLOSURE_MESSAGE,
+                        NettyWebSocketClient.DEFAULT_CLOSE_TIMEOUT_MS);
+                return NoWaitFuture.INSTANCE;
+            }
+        }
+
+        if (logger.isTraceEnabled()) {
+            logger.trace(getClass().getSimpleName() + ".closeAsync was called not from eventLoop thread ");
+        }
+
+        client.eventLoopGroup.execute(() -> close(NORMAL_CLOSURE_STATUS_CODE, NORMAL_CLOSURE_MESSAGE,
+                NettyWebSocketClient.DEFAULT_CLOSE_TIMEOUT_MS));
+
+
+        return new Future<VoidResult>() {
+            @Override
+            public VoidResult sync() throws InterruptedException {
+                synchronized (lock) {
+                    while (!isCloseDone.get()) {
+                        lock.wait();
+                    }
+                }
+
+                if (logger.isTraceEnabled()) {
+                    logger.trace(
+                            getClass().getSimpleName() + ".closeAsync was finished and thread " +
+                                    Thread.currentThread() + " has left wait");
+                }
+
+                return VoidResult.NO_ERROR_RESULT;
+            }
+        };
+    }
+
+    @Override
+    public void close() throws InterruptedException {
+        if (logger.isTraceEnabled()) {
+            logger.trace(
+                    getClass().getSimpleName() + ".close for " + this.url() + " in the channel " +
+                            channel.id() + " and in the thread " + Thread.currentThread());
+
+        }
+
+        closeAsync().sync();
     }
 
     @Override
     public void close(final int statusCode, final String reasonText, final int closeTimeoutMs) {
-        if (isClosed.get()) {
-            return;
-        }
-
-        channel.writeAndFlush(new CloseWebSocketFrame(statusCode, reasonText));
-
-        channel.eventLoop().schedule(() -> {
-            if (channel.isOpen()) {
-                channel.close();
-            }
-        }, closeTimeoutMs, TimeUnit.MILLISECONDS);
-
-        isClosed.set(true);
+        final CharSequenceToCharArea stringToCharArea = new CharSequenceToCharArea(reasonText);
+        close(statusCode, stringToCharArea, 0, stringToCharArea.length(), closeTimeoutMs);
     }
 
     @Override
-    public void close(final int statusCode, final CharArea message, final long startIndex, final long length,
-            final int closeTimeoutMs) {
+    public synchronized void close(final int statusCode, final CharArea message, final long startIndex,
+            final long length, final int closeTimeoutMs) {
 
-        if (isClosed.get()) {
+        if (logger.isTraceEnabled()) {
+            logger.trace(
+                    getClass().getSimpleName() + ".close for " + this.url() + " in the channel " +
+                            channel.id() + " and in the thread " + Thread.currentThread());
+        }
+
+        if (channel == null) {
             return;
         }
 
-        channel.writeAndFlush(new CloseWebSocketFrame(LAST_FRAME, DEFAULT_RCV, msgToBytes(statusCode, message,
-                startIndex, length)));
+        if (!isClosed.compareAndSet(false, true)) {
+            return;
+        }
 
-        channel.eventLoop().schedule(() -> {
-            if (channel.isOpen()) {
-                channel.close();
-            }
-        }, closeTimeoutMs, TimeUnit.MILLISECONDS);
+        channel.writeAndFlush(new CloseWebSocketFrame(LAST_FRAME, statusCode, msgToBytes(statusCode, message,
+                startIndex, length)))
+                .addListener((ChannelFutureListener) future -> {
+                    final Channel futureChannel = future.channel();
+                    if (!future.isSuccess()) {
+                        channel.close();
+                        return;
+                    }
 
-        isClosed.set(true);
+                    futureChannel.eventLoop().schedule((Runnable) futureChannel::close,
+                            closeTimeoutMs, TimeUnit.MILLISECONDS);
+                });
+    }
+
+    @Override
+    public void updateHandshakeHeader(final CharSequence name, final CharSequence value) {
+        handshakeHeaders.set(name, value);
     }
 
     @Override
@@ -282,10 +422,17 @@ class NettyWebSocket implements WebSocket {
         return url;
     }
 
-    void newConnection(final Channel channel) {
+    synchronized void newConnection(final Channel channel) {
+        if (isClosed.get()) {
+            throw new IllegalStateException("WebSocked is already closed!");
+        }
+
         this.channel = channel;
-        isClosed.set(false);
         attemptsToReconnectLeft = client.numberOfReconnectAttempts;
+    }
+
+    Channel channel() {
+        return channel;
     }
 
     void connect() {
@@ -293,20 +440,61 @@ class NettyWebSocket implements WebSocket {
         attemptsToReconnectLeft = client.numberOfReconnectAttempts;
     }
 
-    //todo think about multithreading problems
-    void reconnect() {
+    void reconnect(final Channel channel) {
+        if (logger.isTraceEnabled()) {
+            logger.trace(
+                    getClass().getSimpleName() + ".reconnect for " + this.url() + " in the channel " +
+                            channel.id() + " and in the thread " + Thread.currentThread());
+        }
+
         if (isClosed.get() || attemptsToReconnectLimit == NettyWebSocketClient.NO_RECONNECT) {
+            if (logger.isTraceEnabled()) {
+                logger.trace(getClass().getSimpleName() + ".reconnect reconnect is not scheduled as client has " +
+                                     "NO_RECONNECT property");
+            }
+
+            confirmCloseIsDone();
             return;
         }
 
         if (attemptsToReconnectLimit != NettyWebSocketClient.UNLIMITED_RECONNECT) {
             if (--attemptsToReconnectLeft <= 0) {
-                channel.close();
+                confirmCloseIsDone();
                 return;
             }
         }
 
+        if (logger.isTraceEnabled()) {
+            logger.trace(
+                    getClass().getSimpleName() + ".reconnect reconnect was scheduled for " + this.url() + " in the " +
+                            "channel " +
+                            channel.id() + " and in the thread " + Thread.currentThread());
+
+        }
+
         channel.eventLoop().schedule(connectTask, client.reconnectTimeoutMs, TimeUnit.MILLISECONDS);
+    }
+
+    void confirmCloseIsDone() {
+        if (logger.isTraceEnabled()) {
+            logger.trace(getClass().getSimpleName() + ".confirmCloseIsDone verified WebSocket close" +
+                                 " in the thread " + Thread.currentThread());
+        }
+
+        isCloseDone.set(true);
+
+        synchronized (lock) {
+            lock.notifyAll();
+        }
+    }
+
+    void confirmWsIsOpened() {
+        if (logger.isTraceEnabled()) {
+            logger.trace(getClass().getSimpleName() + ".confirmWsIsOpened verified WebSocket is opened" +
+                                 " in the thread " + Thread.currentThread());
+        }
+
+        isCloseDone.set(false);
     }
 
     private ByteBuf msgToBytes(final ByteArea message, final long startIndex, final long length) {
