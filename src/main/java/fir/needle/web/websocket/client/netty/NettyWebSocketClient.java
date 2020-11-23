@@ -23,6 +23,9 @@
  */
 package fir.needle.web.websocket.client.netty;
 
+import fir.needle.joint.lang.Closeable;
+import fir.needle.joint.lang.Future;
+import fir.needle.joint.lang.VoidResult;
 import fir.needle.joint.logging.JulLogger;
 import fir.needle.joint.logging.Logger;
 import fir.needle.web.websocket.client.WebSocketListener;
@@ -66,8 +69,8 @@ public final class NettyWebSocketClient implements AutoCloseable {
     final Logger logger;
 
     private final Object lock = new Object();
-    private final List<AutoCloseable> openedWebSockets = new ArrayList<>();
-    private boolean isClosed;
+    private final List<Closeable> openedWebSockets = new ArrayList<>();
+    private volatile boolean isClosed;
 
     private NettyWebSocketClient(final NettyWebSocketClientBuilder builder) {
         this.webSocketVersion = builder.webSocketVersion;
@@ -91,6 +94,12 @@ public final class NettyWebSocketClient implements AutoCloseable {
     }
 
     public AutoCloseable openConnection(final String path, final String query, final WebSocketListener listener) {
+        if (logger.isTraceEnabled()) {
+            logger.trace(getClass().getSimpleName() + ".openConnection trying to open connection for " +
+                    host + ':' + port + " in the thread " + Thread.currentThread());
+        }
+
+
         synchronized (lock) {
             if (isClosed) {
                 throw new IllegalStateException("Is closed");
@@ -121,7 +130,7 @@ public final class NettyWebSocketClient implements AutoCloseable {
                             Thread.currentThread());
         }
 
-        final List<AutoCloseable> copy;
+        final List<Closeable> copy;
 
         synchronized (lock) {
             if (isClosed) {
@@ -132,20 +141,42 @@ public final class NettyWebSocketClient implements AutoCloseable {
             copy = new ArrayList<>(openedWebSockets);
         }
 
-        for (final AutoCloseable crtWebSocket : copy) {
+        final ArrayList<Future<VoidResult>> toSync = new ArrayList<>();
+        for (final Closeable crtWebSocket : copy) {
             try {
-                crtWebSocket.close();
+                toSync.add(crtWebSocket.closeAsync());
             } catch (final Exception e) {
-                logger.error("Error while closing opened WebSockets", e);
+                logger.error("Error while closing WebSocket connection", e);
             }
         }
 
-        if (isInternalEventLoopGroup) {
-            eventLoopGroup.shutdownGracefully(0, 0, TimeUnit.MILLISECONDS).sync();
+        try {
+            for (final Future<VoidResult> crtFuture : toSync) {
+                crtFuture.sync();
+            }
+        } catch (final InterruptedException ex) {
+            Thread.currentThread().interrupt();
+        } finally {
+            try {
+                if (isInternalEventLoopGroup) {
+                    eventLoopGroup.shutdownGracefully(0, 0, TimeUnit.MILLISECONDS).sync();
+                    return;
+                }
+
+                if (Thread.currentThread().isInterrupted()) { // if was interrupted in crtFuture
+                    throw new InterruptedException();
+                }
+            } finally {
+                if (logger.isInfoEnabled()) {
+                    logger.info("WS client for " + host + " was closed!");
+                }
+            }
         }
 
-        if (logger.isInfoEnabled()) {
-            logger.info("Client for " + host + ':' + port + " was closed in the thread " + Thread.currentThread());
+        if (logger.isTraceEnabled()) {
+            logger.trace(
+                    getClass().getSimpleName() + ".close has finished for " + host + ':' + port + " in the thread " +
+                            Thread.currentThread());
         }
     }
 

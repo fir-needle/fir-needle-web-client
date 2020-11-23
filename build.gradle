@@ -25,6 +25,7 @@ allprojects {
 
     checkstyle {
         toolVersion = '8.25'
+        configDir = file("${rootDir}/config/checkstyle")
     }
 }
 

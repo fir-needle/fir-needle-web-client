@@ -29,6 +29,8 @@ import fir.needle.joint.io.CharArea;
 
 public interface WebSocketListener {
 
+    void onBeforeOpen(WebSocketHandShaker handShaker);
+
     void onOpened(WebSocket webSocket);
 
     void onPing(ByteArea message, long startIndex, long length);
@@ -39,7 +41,11 @@ public interface WebSocketListener {
 
     void onTextFrame(CharArea message, long startIndex, long length, boolean isFinalFragment);
 
+    void onCloseFrame(CharArea message, long startIndex, long length, int statusCode);
+
     void onListenerError(Throwable error);
 
-    void onClosed(WebSocket webSocket, CharArea message, long startIndex, long length, int statusCode);
+    void onClosed(WebSocket webSocket);
+
+    void onClosedByError(WebSocket webSocket, AbstractWebSocketClientException error);
 }

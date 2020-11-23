@@ -23,9 +23,6 @@
  */
 package fir.needle.web.websocket.client;
 
-
-import fir.needle.joint.io.CharArea;
-
 public abstract class SingleConnectSingleDisconnectListener implements WebSocketListener {
     private static final int INITIAL = 0;
     private static final int OPENED = 1;
@@ -42,17 +39,24 @@ public abstract class SingleConnectSingleDisconnectListener implements WebSocket
     }
 
     @Override
-    public void onClosed(final WebSocket webSocket, final CharArea message, final long startIndex, final long length,
-                         final int statusCode) {
-
+    public void onClosed(final WebSocket webSocket) {
         if (state != CLOSED) {
-            onClose(webSocket, message, startIndex, length, statusCode);
+            onClose(webSocket);
+            state = CLOSED;
+        }
+    }
+
+    @Override
+    public void onClosedByError(final WebSocket webSocket, final AbstractWebSocketClientException error) {
+        if (state != CLOSED) {
+            onCloseByError(webSocket, error);
             state = CLOSED;
         }
     }
 
     protected abstract void onOpen(WebSocket webSocket);
 
-    protected abstract void onClose(WebSocket webSocket, CharArea message, long startIndex, long length,
-            int statusCode);
+    protected abstract void onClose(WebSocket webSocket);
+
+    protected abstract void onCloseByError(WebSocket webSocket, AbstractWebSocketClientException error);
 }

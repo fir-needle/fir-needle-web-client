@@ -23,6 +23,7 @@
  */
 package fir.needle.web.websocket.client.netty;
 
+import fir.needle.joint.logging.Logger;
 import fir.needle.web.websocket.client.WebSocketListener;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.PooledByteBufAllocator;
@@ -45,48 +46,69 @@ import java.util.concurrent.TimeUnit;
 class ConnectTask implements Runnable {
     private final NettyWebSocketClient client;
     private final NettyWebSocket webSocket;
-    private final WebSocketListener listener;
     private final URI uri;
-    private final HttpHeaders handshakeHeaders;
+    private final Bootstrap bootstrap;
+    private final WebSocketListener listener;
+    private final Logger logger;
 
-    ConnectTask(final NettyWebSocketClient client, final NettyWebSocket webSocket, final HttpHeaders handshakeHeaders)
+    ConnectTask(final NettyWebSocketClient client, final NettyWebSocket webSocket,
+            final WebSocketListener listener, final Logger logger)
             throws URISyntaxException {
-
         this.client = client;
         this.webSocket = webSocket;
-        this.listener = webSocket.listener;
         this.uri = new URI(webSocket.url());
-        this.handshakeHeaders = handshakeHeaders;
+        this.listener = listener;
+        this.logger = logger;
+
+        bootstrap = new Bootstrap()
+                            .group(client.eventLoopGroup)
+                            .channel(NioSocketChannel.class)
+                            .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, client.connectTimeoutMs)
+                            .option(ChannelOption.ALLOCATOR, new PooledByteBufAllocator())
+                            .handler(new ChannelInitializer<SocketChannel>() {
+                                @Override
+                                protected void initChannel(final SocketChannel ch) {
+                                    fillPipeline(ch, webSocket.listener, webSocket.handshakeHeaders);
+                                }
+                            });
     }
 
     @Override
     public void run() {
-        final NotificationHandler handler =
-                new NotificationHandler(webSocket,
-                        WebSocketClientHandshakerFactory.newHandshaker(uri, client.webSocketVersion, null,
-                                true, handshakeHeaders),
-                        listener, client.logger);
+        if (webSocket.isClosed()) {
+            if (logger.isTraceEnabled()) {
+                logger.trace(getClass().getSimpleName() + ".run WebSocket was closed for " +
+                                     webSocket.channel().remoteAddress() + ", " + webSocket.url() +
+                                     " for the channel " + webSocket.channel().id() + " and in the thread " +
+                                     Thread.currentThread());
+            }
 
-        final Bootstrap b = new Bootstrap()
-                .group(client.eventLoopGroup)
-                .channel(NioSocketChannel.class)
-                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, client.connectTimeoutMs)
-                .option(ChannelOption.ALLOCATOR, new PooledByteBufAllocator())
-                .handler(new ChannelInitializer<SocketChannel>() {
-                    @Override
-                    protected void initChannel(final SocketChannel ch) {
-                        final ChannelPipeline p = ch.pipeline();
-                        if (client.sslContext != null) {
-                            p.addLast(client.sslContext.newHandler(ch.alloc(), client.host, client.port));
-                        }
-                        p.addLast(new HttpClientCodec())
-                                .addLast(new ReadTimeoutHandler(client.readTimeoutMs, TimeUnit.MILLISECONDS))
-                                .addLast(WebSocketClientCompressionHandler.INSTANCE)
-                                .addLast(new HttpObjectAggregator(8192))
-                                .addLast(handler);
-                    }
-                });
+            webSocket.confirmCloseIsDone();
+            return;
+        }
 
-        webSocket.newConnection(b.connect(uri.getHost(), client.port).channel());
+        listener.onBeforeOpen(webSocket);
+        webSocket.newConnection(bootstrap.connect(uri.getHost(), client.port).channel());
+    }
+
+    void fillPipeline(final SocketChannel channel, final WebSocketListener listener,
+            final HttpHeaders handshakeHeaders) {
+        final ChannelPipeline pipeline = channel.pipeline();
+
+        if (client.sslContext != null) {
+            pipeline.addLast(client.sslContext.newHandler(channel.alloc(), client.host, client.port));
+        }
+
+        pipeline.addLast(new HttpClientCodec());
+
+        pipeline.addLast(new ReadTimeoutHandler(client.readTimeoutMs, TimeUnit.MILLISECONDS));
+
+        pipeline.addLast(WebSocketClientCompressionHandler.INSTANCE);
+
+        pipeline.addLast(new HttpObjectAggregator(8192));
+
+        pipeline.addLast(new NotificationHandler(webSocket, WebSocketClientHandshakerFactory.newHandshaker(
+                uri, client.webSocketVersion, null, true, handshakeHeaders),
+                listener, client.logger));
     }
 }
