@@ -34,6 +34,11 @@ public class SingleConnectSingleDisconnectAdapter<R extends HttpRequest> extends
     }
 
     @Override
+    public void onBeforeRequestSent(final R request) {
+
+    }
+
+    @Override
     public void onResponseStarted(final R request, final int code) {
         //
     }
@@ -74,7 +79,7 @@ public class SingleConnectSingleDisconnectAdapter<R extends HttpRequest> extends
     }
 
     @Override
-    protected void onDoDisconnectedByError(final R request, final String reason) {
+    protected void onDoDisconnectedByError(final R request, final AbstractHttpClientException error) {
         //
     }
 }

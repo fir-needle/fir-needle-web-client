@@ -38,6 +38,7 @@ import javax.net.ssl.SSLException;
 
 import fir.needle.joint.lang.Cancelable;
 import fir.needle.joint.lang.Future;
+import fir.needle.joint.lang.NoWaitFuture;
 import fir.needle.joint.lang.VoidResult;
 import fir.needle.joint.logging.JulLogger;
 import fir.needle.joint.logging.Logger;
@@ -57,6 +58,7 @@ import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.timeout.ReadTimeoutHandler;
+import io.netty.util.concurrent.EventExecutor;
 
 
 public final class NettyHttpClient implements HttpClient {
@@ -207,55 +209,78 @@ public final class NettyHttpClient implements HttpClient {
 
     @Override
     public void close() throws InterruptedException {
+        closeAsync().sync();
+    }
+
+    @Override
+    public Future<VoidResult> closeAsync() {
         if (logger.isTraceEnabled()) {
             logger.trace(
-                    getClass().getSimpleName() + ".close has started for " +
-                            getRequestUrl(null) + " in thread" +
-                            Thread.currentThread());
+                    getClass().getSimpleName() + ".closeAsync has started for " + getRequestUrl(null) +
+                            " in thread" + Thread.currentThread());
         }
 
         final List<Cancelable> copy;
 
         synchronized (lock) {
             if (isClosed) {
-                return;
+                return NoWaitFuture.INSTANCE;
             }
 
             isClosed = true;
             copy = new ArrayList<>(scheduledTasks);
         }
 
-        final ArrayList<Future<VoidResult>> toSync = new ArrayList<>();
         for (final Cancelable scheduledRequest : copy) {
             try {
-                toSync.add(scheduledRequest.cancel());
+                scheduledRequest.cancel();
             } catch (final Exception e) {
                 logger.error("Error while canceling scheduled request", e);
             }
         }
 
-        try {
-            for (final Future<VoidResult> crtFuture : toSync) {
-                crtFuture.sync();
-            }
-        } catch (final InterruptedException ex) {
-            Thread.currentThread().interrupt();
-        } finally {
-            try {
-                if (isInternalEventLoopGroup) {
-                    eventLoopGroup.shutdownGracefully(0, 0, TimeUnit.MILLISECONDS).sync();
-                    return;
-                }
+        io.netty.util.concurrent.Future<?> eventLoopCloseFuture = null;
+        if (isInternalEventLoopGroup) {
+            eventLoopCloseFuture = eventLoopGroup.shutdownGracefully(0, 0, TimeUnit.MILLISECONDS);
+        }
 
-                if (Thread.currentThread().isInterrupted()) { // if was interrupted in crtFuture
-                    throw new InterruptedException();
-                }
-            } finally {
-                if (logger.isInfoEnabled()) {
-                    logger.info("Client for " + getRequestUrl(null) + " was closed!");
-                }
+        for (final EventExecutor eventExecutor : eventLoopGroup) {
+            if (eventExecutor.inEventLoop()) {
+                return NoWaitFuture.INSTANCE;
             }
         }
+
+        final io.netty.util.concurrent.Future<?> finalEventLoopCloseFuture = eventLoopCloseFuture;
+        return new Future<VoidResult>() {
+            @Override
+            public VoidResult sync() throws InterruptedException {
+                try {
+                    if (finalEventLoopCloseFuture != null) {
+                        finalEventLoopCloseFuture.sync();
+                    }
+                } catch (final InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    try {
+                        if (Thread.currentThread().isInterrupted()) { // if was interrupted in crtFuture
+                            throw new InterruptedException();
+                        } else {
+                            if (logger.isTraceEnabled()) {
+                                logger.trace("closeAsync() was finished and thread " +
+                                        Thread.currentThread() + " has left wait");
+                            }
+
+                            return VoidResult.NO_ERROR_RESULT;
+                        }
+                    } finally {
+                        if (logger.isInfoEnabled()) {
+                            logger.info("Http client for " + getRequestUrl(null) +
+                                    " was closed! in the thread " + Thread.currentThread());
+                        }
+                    }
+                }
+            }
+        };
     }
 
     NettyPreparedGet createPreparedGet(final String path, final String query) {

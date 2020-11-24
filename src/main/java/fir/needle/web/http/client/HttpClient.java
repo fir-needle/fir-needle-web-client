@@ -23,6 +23,8 @@
  */
 package fir.needle.web.http.client;
 
-public interface HttpClient extends RequestSender, AutoCloseable {
+import fir.needle.joint.lang.Closeable;
+
+public interface HttpClient extends RequestSender, Closeable {
 
 }

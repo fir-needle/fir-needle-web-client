@@ -138,6 +138,7 @@ class PreparedPostTest {
         buffer.writeBytes(originalRequest.getBytes());
 
         final HttpResponseListenerEvents expectedEvents = new HttpResponseListenerEvents()
+                .addOnBeforeRequestSent(METHOD, path, query)
                 .addOnConnected(METHOD, path, query)
                 .addOnResponseStarted(METHOD, path, query, OK)
                 .addOnHeader("Content-Type", "text/html; charset=utf-8")
@@ -182,7 +183,7 @@ class PreparedPostTest {
         }
     }
 
-    private final class ResponseAsStringListener extends SingleConnectSingleDisconnectAdapter<Post> {
+    private static final class ResponseAsStringListener extends SingleConnectSingleDisconnectAdapter<Post> {
         volatile StringBuilder serverResponse = new StringBuilder();
 
         final CountDownLatch parsingCompleteSignal;
@@ -232,6 +233,12 @@ class PreparedPostTest {
 
         ResponseAsSetOfEventsListener(final CountDownLatch parsingCompleteSignal) {
             this.parsingCompleteSignal = parsingCompleteSignal;
+        }
+
+        @Override
+        public void onBeforeRequestSent(final Post request) {
+            receivedEvents.addOnBeforeRequestSent(request.method(), request.path(), request.query());
+            super.onBeforeRequestSent(request);
         }
 
         @Override

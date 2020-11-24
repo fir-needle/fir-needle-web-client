@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 
+import fir.needle.web.http.client.AbstractHttpClientException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -157,6 +158,7 @@ class GetRequestTest {
         buffer.writeBytes(originalRequest.getBytes());
 
         final HttpResponseListenerEvents expectedEvents = new HttpResponseListenerEvents()
+                .addOnBeforeRequestSent(METHOD, path, query)
                 .addOnConnected(METHOD, path, query)
                 .addOnResponseStarted(METHOD, path, query, OK)
                 .addOnHeader("Content-Type", "text/html; charset=utf-8")
@@ -212,6 +214,7 @@ class GetRequestTest {
         buffer.writeBytes(originalRequest.getBytes());
 
         final HttpResponseListenerEvents expectedEvents = new HttpResponseListenerEvents()
+                .addOnBeforeRequestSent(METHOD, path, query)
                 .addOnConnected(METHOD, path, query)
                 .addOnListenerError(new IllegalStateException("Exception in onConnected"))
                 .addOnResponseStarted(METHOD, path, query, OK)
@@ -276,6 +279,7 @@ class GetRequestTest {
         buffer.writeBytes(originalRequest.getBytes());
 
         final HttpResponseListenerEvents expectedEvents = new HttpResponseListenerEvents()
+                .addOnBeforeRequestSent(METHOD, path, query)
                 .addOnConnected(METHOD, path, query)
                 .addOnResponseStarted(METHOD, path, query, OK)
                 .addOnHeader("Content-Type", "text/html; charset=utf-8")
@@ -346,6 +350,7 @@ class GetRequestTest {
         final ByteBuf buffer = Unpooled.buffer().writeBytes(baseOriginalRequest.getBytes());
 
         final HttpResponseListenerEvents expectedEvents = new HttpResponseListenerEvents()
+                .addOnBeforeRequestSent(METHOD, path, query)
                 .addOnConnected(METHOD, path, query)
                 .addOnResponseStarted(METHOD, path, query, OK)
                 .addOnHeader("Content-Type", "text/html; charset=utf-8")
@@ -360,7 +365,9 @@ class GetRequestTest {
             final String crtRequest = String.format(patternForModifiedRequest, i, i);
 
             buffer.clear().writeBytes((crtRequest + EOL).getBytes());
-            expectedEvents.addOnResponseStarted(METHOD, path, crtQuery, OK)
+            expectedEvents
+                    .addOnBeforeRequestSent(METHOD, path, crtQuery)
+                    .addOnResponseStarted(METHOD, path, crtQuery, OK)
                     .addOnHeader("Content-Type", "text/html; charset=utf-8")
                     .addOnHeader("Content-Length", Integer.toString(buffer.readableBytes()))
                     .addOnBodyStarted()
@@ -427,6 +434,7 @@ class GetRequestTest {
         final ByteBuf buffer = Unpooled.buffer().writeBytes(baseOriginalRequest.getBytes());
 
         final HttpResponseListenerEvents expectedEvents = new HttpResponseListenerEvents()
+                .addOnBeforeRequestSent(METHOD, path, query)
                 .addOnConnected(METHOD, path, query)
                 .addOnResponseStarted(METHOD, path, query, OK)
                 .addOnHeader("Content-Type", "text/html; charset=utf-8")
@@ -441,7 +449,9 @@ class GetRequestTest {
             final String crtRequest = String.format(patternForModifiedRequest, i, i);
 
             buffer.clear().writeBytes((crtRequest + EOL).getBytes());
-            expectedEvents.addOnResponseStarted(METHOD, path, crtQuery, OK)
+            expectedEvents
+                    .addOnBeforeRequestSent(METHOD, path, crtQuery)
+                    .addOnResponseStarted(METHOD, path, crtQuery, OK)
                     .addOnHeader("Content-Type", "text/html; charset=utf-8")
                     .addOnHeader("Content-Length", Integer.toString(buffer.readableBytes()))
                     .addOnBodyStarted()
@@ -536,6 +546,12 @@ class GetRequestTest {
         }
 
         @Override
+        public void onBeforeRequestSent(final Get request) {
+            receivedEvents.addOnBeforeRequestSent(request.method(), request.path(), request.query());
+            super.onBeforeRequestSent(request);
+        }
+
+        @Override
         public void onResponseStarted(final Get request, final int code) {
             receivedEvents.addOnResponseStarted(request.method(), request.path(), request.query(), code);
         }
@@ -571,8 +587,8 @@ class GetRequestTest {
         }
 
         @Override
-        protected void onDoDisconnectedByError(final Get request, final String reason) {
-            receivedEvents.addOnDisconnectedByError(request.method(), request.path(), request.query(), reason);
+        protected void onDoDisconnectedByError(final Get request, final AbstractHttpClientException error) {
+            receivedEvents.addOnDisconnectedByError(request.method(), request.path(), request.query(), error);
         }
 
         @Override

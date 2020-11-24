@@ -31,6 +31,7 @@ import fir.needle.joint.lang.Future;
 import fir.needle.joint.lang.NoWaitFuture;
 import fir.needle.joint.lang.VoidResult;
 import fir.needle.joint.logging.Logger;
+import fir.needle.web.http.client.AbstractHttpClientException;
 import fir.needle.web.http.client.HttpRequest;
 import fir.needle.web.http.client.UpdatableNoBodyRequest;
 import io.netty.bootstrap.Bootstrap;
@@ -48,8 +49,8 @@ abstract class AbstractScheduledRequest<R extends HttpRequest & UpdatableNoBodyR
 
     private final AtomicBoolean isCanceled = new AtomicBoolean(false);
     private volatile boolean isCancelDone;
-    private final int repeatPeriodMs;
-    private final Logger logger;
+    private int repeatPeriodMs;
+    private Logger logger;
 
     private volatile Channel channel;
 
@@ -143,8 +144,8 @@ abstract class AbstractScheduledRequest<R extends HttpRequest & UpdatableNoBodyR
     }
 
     @Override
-    public void onDisconnectedByError(final String reason) {
-        super.onDisconnectedByError(reason);
+    public void onDisconnectedByError(final AbstractHttpClientException exception) {
+        super.onDisconnectedByError(exception);
     }
 
     @Override
@@ -153,18 +154,21 @@ abstract class AbstractScheduledRequest<R extends HttpRequest & UpdatableNoBodyR
             logger.trace(getClass().getSimpleName() + ".cancel was called from the thread " + Thread.currentThread());
         }
 
-        eventLoopGroup.execute(() -> {
-            if (logger.isTraceEnabled()) {
-                logger.trace(getClass().getSimpleName() + ".cancel canceling scheduled request" +
-                        " in the thread " + Thread.currentThread());
+        final Runnable cancelRequest = new Runnable() {
+            @Override
+            public void run() {
+                if (logger.isTraceEnabled()) {
+                    logger.trace(getClass().getSimpleName() + ".cancel canceling scheduled request" +
+                            " in the thread " + Thread.currentThread());
+                }
+                isCanceled.set(true);
+                client.cancelScheduledRequest(AbstractScheduledRequest.this);
             }
-
-            isCanceled.set(true);
-            client.cancelScheduledRequest(this);
-        });
+        };
 
         for (final EventExecutor eventExecutor : eventLoopGroup) {
             if (eventExecutor.inEventLoop()) {
+                cancelRequest.run();
                 return NoWaitFuture.INSTANCE;
             }
         }
@@ -172,6 +176,8 @@ abstract class AbstractScheduledRequest<R extends HttpRequest & UpdatableNoBodyR
         if (logger.isTraceEnabled()) {
             logger.trace(getClass().getSimpleName() + ".cancel was called not from eventLoop thread ");
         }
+
+        eventLoopGroup.execute(cancelRequest);
 
         return new Future<VoidResult>() {
             @Override
@@ -220,8 +226,8 @@ abstract class AbstractScheduledRequest<R extends HttpRequest & UpdatableNoBodyR
             return;
         }
 
-        this.channel = bootstrap.connect().channel();
         this.isCancelDone = false;
+        this.channel = bootstrap.connect().channel();
 
         if (logger.isTraceEnabled()) {
             logger.trace(getClass().getSimpleName() + ".channel finish setting channel into scheduled request " +

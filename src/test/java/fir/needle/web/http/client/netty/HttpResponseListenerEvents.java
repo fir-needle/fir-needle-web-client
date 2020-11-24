@@ -24,6 +24,7 @@
 package fir.needle.web.http.client.netty;
 
 import fir.needle.joint.io.ByteArea;
+import fir.needle.web.http.client.AbstractHttpClientException;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -39,6 +40,11 @@ class HttpResponseListenerEvents {
 
     HttpResponseListenerEvents addOnConnected(final String method, final String path, final String query) {
         events.add(new OnConnected(method, path, query));
+        return this;
+    }
+
+    HttpResponseListenerEvents addOnBeforeRequestSent(final String method, final String path, final String query) {
+        events.add(new OnBeforeRequestSent(method, path, query));
         return this;
     }
 
@@ -85,9 +91,9 @@ class HttpResponseListenerEvents {
     }
 
     HttpResponseListenerEvents addOnDisconnectedByError(final String method, final String path, final String query,
-            final String reason) {
+            final AbstractHttpClientException error) {
 
-        events.add(new OnDisconnectedByError(method, path, query, reason));
+        events.add(new OnDisconnectedByError(method, path, query, error));
         return this;
     }
 
@@ -110,7 +116,7 @@ class HttpResponseListenerEvents {
         return events.equals(o.events);
     }
 
-    private final class OnConnected {
+    private static final class OnConnected {
         private final String method;
         private final String path;
         private final String query;
@@ -141,7 +147,38 @@ class HttpResponseListenerEvents {
         }
     }
 
-    private final class OnResponseStarted {
+    private static final class OnBeforeRequestSent {
+        private final String method;
+        private final String path;
+        private final String query;
+
+        private OnBeforeRequestSent(final String method, final String path, final String query) {
+            this.method = method;
+            this.path = path;
+            this.query = query;
+        }
+
+        @Override
+        public int hashCode() {
+            return super.hashCode();
+        }
+
+        @Override
+        public boolean equals(final Object obj) {
+            if (this == obj) {
+                return true;
+            }
+
+            if (!(obj != null && getClass() == obj.getClass())) {
+                return false;
+            }
+
+            final OnBeforeRequestSent o = (OnBeforeRequestSent) obj;
+            return method.equals(o.method) && path.equals(o.path) && query.equals(o.query);
+        }
+    }
+
+    private static final class OnResponseStarted {
         private final String method;
         private final String path;
         private final String query;
@@ -183,7 +220,6 @@ class HttpResponseListenerEvents {
             this.value = value;
         }
 
-
         @Override
         public int hashCode() {
             return super.hashCode();
@@ -204,7 +240,7 @@ class HttpResponseListenerEvents {
         }
     }
 
-    private final class OnBodyStarted {
+    private static final class OnBodyStarted {
 
         @Override
         public int hashCode() {
@@ -221,7 +257,7 @@ class HttpResponseListenerEvents {
         }
     }
 
-    private final class OnBodyContent {
+    private static final class OnBodyContent {
         private final byte[] buffer;
 
         private OnBodyContent(final ByteArea buffer, final long startIndex, final long length) {
@@ -251,7 +287,7 @@ class HttpResponseListenerEvents {
         }
     }
 
-    private final class OnBodyFinished {
+    private static final class OnBodyFinished {
 
         @Override
         public int hashCode() {
@@ -268,7 +304,7 @@ class HttpResponseListenerEvents {
         }
     }
 
-    private final class OnResponseFinished {
+    private static final class OnResponseFinished {
 
         @Override
         public int hashCode() {
@@ -285,7 +321,7 @@ class HttpResponseListenerEvents {
         }
     }
 
-    private final class OnListenerError {
+    private static final class OnListenerError {
         private final Throwable error;
 
         private OnListenerError(final Throwable error) {
@@ -312,7 +348,7 @@ class HttpResponseListenerEvents {
         }
     }
 
-    private final class OnDisconnected {
+    private static final class OnDisconnected {
         private final String method;
         private final String path;
         private final String query;
@@ -343,19 +379,19 @@ class HttpResponseListenerEvents {
         }
     }
 
-    private final class OnDisconnectedByError {
+    private static final class OnDisconnectedByError {
         private final String method;
         private final String path;
         private final String query;
-        private final String reason;
+        private final AbstractHttpClientException error;
 
         private OnDisconnectedByError(final String method, final String path, final String query,
-                final String reason) {
+                final AbstractHttpClientException error) {
 
             this.method = method;
             this.path = path;
             this.query = query;
-            this.reason = reason;
+            this.error = error;
         }
 
         @Override
@@ -374,7 +410,7 @@ class HttpResponseListenerEvents {
             }
 
             final OnDisconnectedByError o = (OnDisconnectedByError) obj;
-            return method.equals(o.method) && path.equals(o.path) && query.equals(o.query) && reason.equals(o.reason);
+            return method.equals(o.method) && path.equals(o.path) && query.equals(o.query) && error.equals(o.error);
         }
     }
 }

@@ -36,7 +36,7 @@ import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpVersion;
 
-public class RequestBuilder<P extends NoBodyRequestBuilder> implements PreparableRequestsFactory {
+class RequestBuilder<P extends NoBodyRequestBuilder> implements PreparableRequestsFactory {
 
     HttpVersion httpVersion = HttpVersion.HTTP_1_1;
     HttpMethod httpMethod;
