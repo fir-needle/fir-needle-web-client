@@ -68,7 +68,6 @@ class ReconnectHandler extends ChannelInboundHandlerAdapter {
                             " in the channel " + ctx.channel().id() + " and in the thread " + Thread.currentThread());
         }
 
-        //todo think about this logging message in case disconnect for single request
         if (requestHolder.isCanceled()) {
             if (logger.isTraceEnabled()) {
                 logger.trace(
@@ -97,7 +96,6 @@ class ReconnectHandler extends ChannelInboundHandlerAdapter {
         } else {
             // we were closed normally so it looks like KEEP_ALIVE is not supported by the server, let's
             // try to repeat rather than to reconnect
-            //todo think what delay to use
             ctx.channel().eventLoop().schedule(reconnectTask, requestHolder.currentRequestDelayMs(),
                     TimeUnit.MILLISECONDS);
 

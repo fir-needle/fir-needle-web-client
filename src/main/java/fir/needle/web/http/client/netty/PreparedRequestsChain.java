@@ -32,6 +32,7 @@ import fir.needle.joint.lang.Cancelable;
 import fir.needle.joint.lang.Future;
 import fir.needle.joint.lang.NoWaitFuture;
 import fir.needle.joint.lang.VoidResult;
+import fir.needle.web.http.client.AbstractHttpClientException;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.handler.codec.http.HttpRequest;
@@ -140,6 +141,11 @@ class PreparedRequestsChain implements NettyRequestHolder, NettyResponseListener
     }
 
     @Override
+    public void onBeforeRequestSend() {
+        crtRequest.onBeforeRequestSend();
+    }
+
+    @Override
     public void onResponseStarted(final int code) {
         wasResponseFinished = false;
         crtRequest.onResponseStarted(code);
@@ -188,8 +194,13 @@ class PreparedRequestsChain implements NettyRequestHolder, NettyResponseListener
     }
 
     @Override
-    public void onDisconnectedByError(final String reason) {
+    public void onDisconnectedByError(final AbstractHttpClientException exception) {
+        if (!wasResponseFinished) {
+            isResend = true;
+            reconnectCounter++;
+        }
 
+        crtRequest.onDisconnectedByError(exception);
     }
 
     void resendCurrentRequest() {

@@ -135,6 +135,7 @@ class PreparedDeleteTest {
         buffer.writeBytes(originalRequest.getBytes());
 
         final HttpResponseListenerEvents expectedEvents = new HttpResponseListenerEvents()
+                .addOnBeforeRequestSent(METHOD, path, query)
                 .addOnConnected(METHOD, path, query)
                 .addOnResponseStarted(METHOD, path, query, OK)
                 .addOnHeader("Content-Type", "text/html; charset=utf-8")
@@ -224,6 +225,12 @@ class PreparedDeleteTest {
 
         ResponseAsSetOfEventsListener(final CountDownLatch parsingCompleteSignal) {
             this.parsingCompleteSignal = parsingCompleteSignal;
+        }
+
+        @Override
+        public void onBeforeRequestSent(final Delete request) {
+            receivedEvents.addOnBeforeRequestSent(request.method(), request.path(), request.query());
+            super.onBeforeRequestSent(request);
         }
 
         @Override

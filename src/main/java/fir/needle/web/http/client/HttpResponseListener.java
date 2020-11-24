@@ -28,6 +28,8 @@ import fir.needle.joint.io.ByteArea;
 
 public interface HttpResponseListener<R extends HttpRequest> {
 
+    void onBeforeRequestSent(R request);
+
     void onConnected(R request);
 
     void onResponseStarted(R request, int code);
@@ -46,5 +48,5 @@ public interface HttpResponseListener<R extends HttpRequest> {
 
     void onDisconnected(R request);
 
-    void onDisconnectedByError(R request, String reason);
+    void onDisconnectedByError(R request, AbstractHttpClientException exception);
 }

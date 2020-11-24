@@ -142,6 +142,7 @@ class PreparedPutTest {
         buffer.writeBytes(originalRequest.getBytes());
 
         final HttpResponseListenerEvents expectedEvents = new HttpResponseListenerEvents()
+                .addOnBeforeRequestSent(METHOD, path, query)
                 .addOnConnected(METHOD, path, query)
                 .addOnResponseStarted(METHOD, path, query, OK)
                 .addOnHeader("Content-Type", "text/html; charset=utf-8")
@@ -227,11 +228,10 @@ class PreparedPutTest {
         final ResponseAsSetOfEventsWithRequestResendListener listener =
                 new ResponseAsSetOfEventsWithRequestResendListener(parsingCompleteSignal, timesToResend, BODY + "%d");
 
-//        final ByteBuf buffer = Unpooled.buffer().writeBytes(baseOriginalRequest.getBytes())
-
         byteArea.srcString(baseOriginalRequest);
 
         final HttpResponseListenerEvents expectedEvents = new HttpResponseListenerEvents()
+                .addOnBeforeRequestSent(METHOD, path, query)
                 .addOnConnected(METHOD, path, query)
                 .addOnResponseStarted(METHOD, path, query, OK)
                 .addOnHeader("Content-Type", "text/html; charset=utf-8")
@@ -246,7 +246,9 @@ class PreparedPutTest {
             final String crtRequest = String.format(patternForModifiedRequest, i, i, i);
 
             byteArea.srcString(crtRequest + EOL);
-            expectedEvents.addOnResponseStarted(METHOD, path, crtQuery, OK)
+            expectedEvents
+                    .addOnBeforeRequestSent(METHOD, path, crtQuery)
+                    .addOnResponseStarted(METHOD, path, crtQuery, OK)
                     .addOnHeader("Content-Type", "text/html; charset=utf-8")
                     .addOnHeader("Content-Length", Integer.toString(byteArea.length()))
                     .addOnBodyStarted()
@@ -291,7 +293,7 @@ class PreparedPutTest {
         }
     }
 
-    private final class ResponseAsStringListener extends SingleConnectSingleDisconnectAdapter<Put> {
+    private static final class ResponseAsStringListener extends SingleConnectSingleDisconnectAdapter<Put> {
         volatile StringBuilder serverResponse = new StringBuilder();
 
         final CountDownLatch parsingCompleteSignal;
@@ -342,6 +344,12 @@ class PreparedPutTest {
 
         ResponseAsSetOfEventsListener(final CountDownLatch parsingCompleteSignal) {
             this.parsingCompleteSignal = parsingCompleteSignal;
+        }
+
+        @Override
+        public void onBeforeRequestSent(final Put request) {
+            receivedEvents.addOnBeforeRequestSent(request.method(), request.path(), request.query());
+            super.onBeforeRequestSent(request);
         }
 
         @Override

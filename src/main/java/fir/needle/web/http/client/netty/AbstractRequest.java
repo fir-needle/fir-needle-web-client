@@ -25,11 +25,7 @@ package fir.needle.web.http.client.netty;
 
 import fir.needle.joint.io.ByteAppendable;
 import fir.needle.joint.io.ByteArea;
-import fir.needle.web.http.client.HttpRequest;
-import fir.needle.web.http.client.HttpResponseListener;
-import fir.needle.web.http.client.RequestSender;
-import fir.needle.web.http.client.UpdatableBodyRequest;
-import fir.needle.web.http.client.UpdatableNoBodyRequest;
+import fir.needle.web.http.client.*;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaders;
@@ -38,7 +34,6 @@ import io.netty.handler.codec.http.HttpVersion;
 
 abstract class AbstractRequest<R extends HttpRequest & UpdatableNoBodyRequest> implements HttpRequest,
         UpdatableBodyRequest<R>, NettyHttpRequest, NettyResponseListener {
-
     HttpVersion httpVersion = HttpVersion.HTTP_1_1;
     HttpMethod httpMethod;
 
@@ -130,6 +125,11 @@ abstract class AbstractRequest<R extends HttpRequest & UpdatableNoBodyRequest> i
     }
 
     @Override
+    public void onBeforeRequestSend() {
+        listener.onBeforeRequestSent((R) this);
+    }
+
+    @Override
     public void onResponseStarted(final int code) {
         listener.onResponseStarted((R) this, code);
     }
@@ -170,8 +170,8 @@ abstract class AbstractRequest<R extends HttpRequest & UpdatableNoBodyRequest> i
     }
 
     @Override
-    public void onDisconnectedByError(final String reason) {
-        listener.onDisconnectedByError((R) this, reason);
+    public void onDisconnectedByError(final AbstractHttpClientException exception) {
+        listener.onDisconnectedByError((R) this, exception);
     }
 
     private void updateRelativeUrl() {

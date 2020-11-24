@@ -24,10 +24,13 @@
 package fir.needle.web.http.client.netty;
 
 import fir.needle.joint.io.ByteArea;
+import fir.needle.web.http.client.AbstractHttpClientException;
 
 interface NettyResponseListener {
 
     void onConnected();
+
+    void onBeforeRequestSend();
 
     void onResponseStarted(int code);
 
@@ -45,5 +48,5 @@ interface NettyResponseListener {
 
     void onDisconnected();
 
-    void onDisconnectedByError(String reason);
+    void onDisconnectedByError(AbstractHttpClientException exception);
 }

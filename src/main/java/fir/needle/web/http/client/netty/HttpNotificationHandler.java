@@ -28,6 +28,9 @@ import java.util.List;
 import java.util.Map;
 
 import fir.needle.joint.logging.Logger;
+import fir.needle.web.http.client.HttpClientException;
+import fir.needle.web.http.client.HttpConnectTimeoutException;
+import fir.needle.web.http.client.HttpReadTimeoutException;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
@@ -118,6 +121,19 @@ class HttpNotificationHandler extends SimpleChannelInboundHandler<HttpObject> {
             return;
         }
 
+        try {
+            listener.onBeforeRequestSend();
+        } catch (final Exception | AssertionError e) {
+
+            logger.error("Error while onBeforeRequestSend notification", e);
+
+            try {
+                listener.onListenerError(e);
+            } catch (final Exception | AssertionError er) {
+                logger.error("Error while onListenerError notification", er);
+            }
+        }
+
         final HttpRequest crtHttpRequest = requestHolder.get();
         if (logger.isTraceEnabled()) {
             logger.trace(
@@ -177,17 +193,19 @@ class HttpNotificationHandler extends SimpleChannelInboundHandler<HttpObject> {
                 }
             } else {
                 if (error instanceof ReadTimeoutException) {
-                    listener.onDisconnectedByError("Connection closed by timeout due to the absence of incoming " +
-                            "messages");
+                    listener.onDisconnectedByError(new HttpReadTimeoutException(
+                            "Connection closed by timeout due to the absence of incoming messages", error));
                 } else {
-                    listener.onDisconnectedByError("Connection closed due to exception: " + error.getMessage());
+                    listener.onDisconnectedByError(new HttpClientException(
+                            "Connection closed due to exception: " + error.getMessage(), error));
                 }
             }
         } else {
             try {
-                listener.onDisconnectedByError("Failed to establish connection to " + host + ":" + port);
+                listener.onDisconnectedByError(new HttpConnectTimeoutException(
+                        "Failed to establish connection to " + host + ":" + port));
             } catch (final Exception | AssertionError e) {
-                logger.error("Error while onDisconnectedBy");
+                logger.error("Error while onDisconnectedByError notification", e);
             }
         }
 

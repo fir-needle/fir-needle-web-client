@@ -35,10 +35,12 @@ import io.netty.handler.codec.http.HttpRequest;
 class SendRequestHandler extends SimpleChannelInboundHandler<Boolean> {
     private final NettyRequestHolder requestHolder;
     private final Logger logger;
+    private final NettyResponseListener listener;
 
     SendRequestHandler(final NettyRequestHolder requestHolder, final Logger logger) {
         this.requestHolder = requestHolder;
         this.logger = logger;
+        this.listener = requestHolder.listener();
     }
 
     @Override
@@ -67,8 +69,7 @@ class SendRequestHandler extends SimpleChannelInboundHandler<Boolean> {
             return;
         }
 
-        final HttpRequest requestToSend = requestHolder.get();
-        if (requestToSend == null) {
+        if (requestHolder.get() == null) {
             return;
         }
 
@@ -86,24 +87,41 @@ class SendRequestHandler extends SimpleChannelInboundHandler<Boolean> {
                 return;
             }
 
+            try {
+                listener.onBeforeRequestSend();
+            } catch (final Exception | AssertionError e) {
+
+                logger.error("Error while onBeforeRequestSend notification", e);
+
+                try {
+                    listener.onListenerError(e);
+                } catch (final Exception | AssertionError er) {
+                    logger.error("Error while onListenerError notification", er);
+                }
+            }
+
+            final HttpRequest requestToSend = requestHolder.get();
             if (logger.isTraceEnabled()) {
                 logger.trace(
-                        getClass().getSimpleName() + ".channelRead0 sending request" +
+                        getClass().getSimpleName() + ".channelRead0 sending request to " +
                                 ctx.channel().remoteAddress() + ", " + requestHolder.relativeUrl() +
                                 " in the channel " + ctx.channel().id() + " and in the thread " +
                                 Thread.currentThread() + ":\n" + requestToSend +
                                 "\n\n" + new String(((DefaultFullHttpRequest) requestToSend).content().array()));
             }
 
-            final ChannelFuture channelFuture = ctx.channel().writeAndFlush(requestToSend);
+            if (ctx.channel().isActive()) {
+                final ChannelFuture channelFuture = ctx.channel().writeAndFlush(requestToSend);
 
-            if (logger.isTraceEnabled()) {
-                channelFuture.addListener((f) ->
-                        logger.trace("_____________The result of write and flush in the channel " + ctx.channel().id() +
-                                " and in the thread " + Thread.currentThread() + " is " + f.isSuccess() +
-                                "_____________" + (f.cause() == null ? "" : ('\n' + f.cause().toString()))));
+                if (logger.isTraceEnabled()) {
+                    channelFuture.addListener((f) ->
+                            logger.trace(
+                                    "_____________The result of write and flush in the channel " + ctx.channel().id() +
+                                            " and in the thread " + Thread.currentThread() + " is " + f.isSuccess() +
+                                            "_____________" +
+                                            (f.cause() == null ? "" : ('\n' + f.cause().toString()))));
+                }
             }
-
         }, requestHolder.currentRequestDelayMs(), TimeUnit.MILLISECONDS);
 
         if (logger.isTraceEnabled()) {

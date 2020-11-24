@@ -25,11 +25,11 @@ package fir.needle.web.http.client.netty;
 
 import fir.needle.joint.io.ByteArea;
 import fir.needle.web.SilentTestLogger;
+import fir.needle.web.http.client.AbstractHttpClientException;
 import fir.needle.web.http.client.HttpResponseListener;
 import fir.needle.web.http.client.ScheduledGet;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -39,7 +39,6 @@ import java.util.concurrent.CountDownLatch;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-@Disabled
 class ScheduledGetTest {
     private static final String METHOD = "GET";
     private static final String EOL = "\r\n";
@@ -85,6 +84,7 @@ class ScheduledGetTest {
         final ByteBuf buffer = Unpooled.buffer().writeBytes(baseOriginalRequest.getBytes());
 
         final HttpResponseListenerEvents expectedEvents = new HttpResponseListenerEvents()
+                .addOnBeforeRequestSent(METHOD, path, query)
                 .addOnConnected(METHOD, path, query)
                 .addOnResponseStarted(METHOD, path, query, OK)
                 .addOnHeader("Content-Type", "text/html; charset=utf-8")
@@ -99,13 +99,17 @@ class ScheduledGetTest {
             final String crtRequest = String.format(patternForModifiedRequest, i, i);
 
             if (i == timesToResend - 1) {
-                expectedEvents.addOnResponseStarted(METHOD, path, crtQuery, OK)
+                expectedEvents
+                        .addOnBeforeRequestSent(METHOD, path, crtQuery)
+                        .addOnResponseStarted(METHOD, path, crtQuery, OK)
                         .addOnDisconnected(METHOD, path, crtQuery);
                 break;
             }
 
             buffer.clear().writeBytes((crtRequest + EOL).getBytes());
-            expectedEvents.addOnResponseStarted(METHOD, path, crtQuery, OK)
+            expectedEvents
+                    .addOnBeforeRequestSent(METHOD, path, crtQuery)
+                    .addOnResponseStarted(METHOD, path, crtQuery, OK)
                     .addOnHeader("Content-Type", "text/html; charset=utf-8")
                     .addOnHeader("Content-Length", Integer.toString(buffer.readableBytes()))
                     .addOnBodyStarted()
@@ -172,6 +176,7 @@ class ScheduledGetTest {
         final ByteBuf buffer = Unpooled.buffer().writeBytes(baseOriginalRequest.getBytes());
 
         final HttpResponseListenerEvents expectedEvents = new HttpResponseListenerEvents()
+                .addOnBeforeRequestSent(METHOD, path, query)
                 .addOnConnected(METHOD, path, query)
                 .addOnResponseStarted(METHOD, path, query, OK)
                 .addOnHeader("Content-Type", "text/html; charset=utf-8")
@@ -186,13 +191,17 @@ class ScheduledGetTest {
             final String crtRequest = String.format(patternForModifiedRequest, i, i);
 
             if (i == timesToResend - 1) {
-                expectedEvents.addOnResponseStarted(METHOD, path, crtQuery, OK)
+                expectedEvents
+                        .addOnBeforeRequestSent(METHOD, path, crtQuery)
+                        .addOnResponseStarted(METHOD, path, crtQuery, OK)
                         .addOnDisconnected(METHOD, path, crtQuery);
                 break;
             }
 
             buffer.clear().writeBytes((crtRequest + EOL).getBytes());
-            expectedEvents.addOnResponseStarted(METHOD, path, crtQuery, OK)
+            expectedEvents
+                    .addOnBeforeRequestSent(METHOD, path, crtQuery)
+                    .addOnResponseStarted(METHOD, path, crtQuery, OK)
                     .addOnHeader("Content-Type", "text/html; charset=utf-8")
                     .addOnHeader("Content-Length", Integer.toString(buffer.readableBytes()))
                     .addOnBodyStarted()
@@ -237,6 +246,11 @@ class ScheduledGetTest {
 
         ResponseAsSetOfEventsListener(final CountDownLatch parsingCompleteSignal) {
             this.parsingCompleteSignal = parsingCompleteSignal;
+        }
+
+        @Override
+        public void onBeforeRequestSent(final ScheduledGet request) {
+            receivedEvents.addOnBeforeRequestSent(request.method(), request.path(), request.query());
         }
 
         @Override
@@ -287,7 +301,7 @@ class ScheduledGetTest {
         }
 
         @Override
-        public void onDisconnectedByError(final ScheduledGet request, final String reason) {
+        public void onDisconnectedByError(final ScheduledGet request, final AbstractHttpClientException error) {
             //todo take a look, this could be useful
         }
     }
