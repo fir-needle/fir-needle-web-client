@@ -70,8 +70,6 @@ class PreparedPutTest {
                 "content-length: " + BODY.length() + EOL + EOL +
                 BODY;
 
-        System.out.println("Length before send is " + originalRequest.length());
-
         final List<Integer> numberOfBytesToReceive = new ArrayList<>();
         numberOfBytesToReceive.add(originalRequest.length());
 

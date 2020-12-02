@@ -60,10 +60,8 @@ class NettyWebSocketClientTest {
     private static final int PONG_FRAME = 10;
 
     private static final int NORMAL_CLOSURE_STATUS_CODE = 1000;
-    private static final int UBNORMAL_CLOSURE_STATUS_CODE = 1006;
 
     private static final String NORMAL_CLOSURE_MESSAGE = "Normal closure";
-    private static final String UBNORMAL_CLOSURE_MESSAGE = "Ubnormal closure";
     private static final String CLIENT_PING_MESSAGE = "Ping from client";
     private static final String CLIENT_PONG_MESSAGE = "Pong from client";
     private static final String SERVER_PING_MESSAGE = "Ping from server";
@@ -151,14 +149,12 @@ class NettyWebSocketClientTest {
             @Override
             public void onBinaryFrame(final ByteArea message, final long startIndex, final long length,
                     final boolean isFinalFragment) {
-
                 receivedEvents.addOnBinaryFrame(message, startIndex, length, isFinalFragment);
             }
 
             @Override
             public void onTextFrame(final CharArea message, final long startIndex, final long length,
                     final boolean isFinalFragment) {
-
                 receivedEvents.addOnTextFrame(message, startIndex, length, isFinalFragment);
             }
 
@@ -166,9 +162,7 @@ class NettyWebSocketClientTest {
             public void onCloseFrame(final CharArea message, final long startIndex, final long length,
                     final int statusCode) {
                 receivedEvents.addOnCloseFrame(message, startIndex, length, statusCode);
-
-                webSocket.sendClose(NORMAL_CLOSURE_STATUS_CODE, NORMAL_CLOSURE_MESSAGE);
-                webSocket.close(500);
+                webSocket.close();
             }
 
             @Override
@@ -191,6 +185,7 @@ class NettyWebSocketClientTest {
 
         try (NettyWebSocketClient client = NettyWebSocketClient.builder()
                 .withReadTimeout(DEFAULT_READ_TIMEOUT_MS)
+                .withNoReconnect()
                 .withLogger(testLogger)
                 .build("localhost", PORT)) {
             testServer.start();
@@ -202,7 +197,6 @@ class NettyWebSocketClientTest {
             webSocketClosedSignal.await();
 
             assertEquals(expectedEvents, receivedEvents);
-
         } catch (final InterruptedException e) {
             testServer.interrupt();
         } finally {
@@ -268,8 +262,7 @@ class NettyWebSocketClientTest {
             @Override
             public void onOpened(final WebSocket webSocket) {
                 receivedEvents.addOnOpened(webSocket.path(), webSocket.query());
-                webSocket.sendClose(NORMAL_CLOSURE_STATUS_CODE, NORMAL_CLOSURE_MESSAGE);
-                webSocket.close(3000);
+                webSocket.close();
             }
 
             @Override
@@ -465,8 +458,7 @@ class NettyWebSocketClientTest {
                 receivedEvents.addOnPong(message, startIndex, length);
 
                 if (++ctr >= 5) {
-                    webSocket.sendClose(NORMAL_CLOSURE_STATUS_CODE, NORMAL_CLOSURE_MESSAGE);
-                    webSocket.closeAsync();
+                    webSocket.close();
                 }
             }
 
@@ -639,8 +631,7 @@ class NettyWebSocketClientTest {
                 receivedEvents.addOnBinaryFrame(message, startIndex, length, isFinalFragment);
 
                 if (ctr > 2) {
-                    webSocket.sendClose(NORMAL_CLOSURE_STATUS_CODE, NORMAL_CLOSURE_MESSAGE);
-                    webSocket.closeAsync();
+                    webSocket.close();
                     return;
                 }
 
@@ -818,8 +809,7 @@ class NettyWebSocketClientTest {
                 receivedEvents.addOnTextFrame(message, startIndex, length, isFinalFragment);
 
                 if (crtMessageEnding > 'g') {
-                    webSocket.sendClose(NORMAL_CLOSURE_STATUS_CODE, NORMAL_CLOSURE_MESSAGE);
-                    webSocket.closeAsync();
+                    webSocket.close();
                     return;
                 }
 
@@ -1370,6 +1360,7 @@ class NettyWebSocketClientTest {
                 .addOnListenerError(new IllegalStateException("onTextFrame"))
                 .addOnCloseFrame(charArea.srcString(NORMAL_CLOSURE_MESSAGE),
                         ZERO_START_INDEX, charArea.length(), NORMAL_CLOSURE_STATUS_CODE)
+                .addOnListenerError(new IllegalStateException("onCloseFrame"))
                 .addOnClosed(WEB_SOCKET_PATH, null);
 
         final WebSocketListenerEvents receivedEvents = new WebSocketListenerEvents();
@@ -1418,6 +1409,7 @@ class NettyWebSocketClientTest {
             public void onCloseFrame(final CharArea message, final long startIndex, final long length,
                     final int statusCode) {
                 receivedEvents.addOnCloseFrame(message, startIndex, length, statusCode);
+                throw new IllegalStateException("onCloseFrame");
             }
 
             @Override
@@ -1687,8 +1679,7 @@ class NettyWebSocketClientTest {
                                 ZERO_START_INDEX, byteArea.length());
                         break;
                     default:
-                        webSocket.sendClose(NORMAL_CLOSURE_STATUS_CODE, NORMAL_CLOSURE_MESSAGE);
-                        webSocket.closeAsync();
+                        webSocket.close();
                 }
             }
 
@@ -1885,8 +1876,7 @@ class NettyWebSocketClientTest {
                     final boolean isFinalFragment) {
 
                 if (++receivedFramesCtr >= 6) {
-                    webSocket.sendClose(NORMAL_CLOSURE_STATUS_CODE, NORMAL_CLOSURE_MESSAGE);
-                    webSocket.closeAsync();
+                    webSocket.close();
                 }
 
                 receivedEvents.addOnBinaryFrame(message, startIndex, length, isFinalFragment);
@@ -1896,8 +1886,7 @@ class NettyWebSocketClientTest {
             public void onTextFrame(final CharArea message, final long startIndex, final long length,
                     final boolean isFinalFragment) {
                 if (++receivedFramesCtr >= 6) {
-                    webSocket.sendClose(NORMAL_CLOSURE_STATUS_CODE, NORMAL_CLOSURE_MESSAGE);
-                    webSocket.closeAsync();
+                    webSocket.close();
                 }
 
                 receivedEvents.addOnTextFrame(message, startIndex, length, isFinalFragment);
@@ -2077,7 +2066,7 @@ class NettyWebSocketClientTest {
             @Override
             public void onListenerError(final Throwable error) {
                 receivedEvents.addOnListenerError(error);
-                webSocket.sendClose(NORMAL_CLOSURE_STATUS_CODE, NORMAL_CLOSURE_MESSAGE);
+                webSocket.close();
             }
 
             @Override
@@ -2236,8 +2225,7 @@ class NettyWebSocketClientTest {
                 receivedEvents.addOnBinaryFrame(message, startIndex, length, isFinalFragment);
 
                 if (isLast) {
-                    webSocket.sendClose(NORMAL_CLOSURE_STATUS_CODE, NORMAL_CLOSURE_MESSAGE);
-                    webSocket.closeAsync();
+                    webSocket.close();
                     return;
                 }
 
@@ -2357,9 +2345,7 @@ class NettyWebSocketClientTest {
             @Override
             public void onOpened(final WebSocket webSocket) {
                 receivedEvents.addOnOpened(webSocket.path(), webSocket.query());
-
-                webSocket.sendClose(customClosureCode, customClosureMessage);
-                webSocket.close(DEFAULT_CLOSE_TIMEOUT_MS);
+                webSocket.close(customClosureCode, customClosureMessage, DEFAULT_CLOSE_TIMEOUT_MS);
             }
 
             @Override
@@ -2550,8 +2536,7 @@ class NettyWebSocketClientTest {
                 receivedEvents.addOnBinaryFrame(message, startIndex, length, isFinalFragment);
 
                 if (reconnectionAttemptsCtr > 0) {
-                    webSocket.sendClose(NORMAL_CLOSURE_STATUS_CODE, NORMAL_CLOSURE_MESSAGE);
-                    webSocket.closeAsync();
+                    webSocket.close();
                 }
             }
 
@@ -3070,8 +3055,7 @@ class NettyWebSocketClientTest {
             public void onPong(final ByteArea message, final long startIndex, final long length) {
                 receivedEvents.addOnPong(message, startIndex, length);
                 if (++receivedPongsCtr >= 3) {
-                    webSocket.sendClose(NORMAL_CLOSURE_STATUS_CODE, NORMAL_CLOSURE_MESSAGE);
-                    webSocket.closeAsync();
+                    webSocket.close();
                 }
             }
 
@@ -3147,6 +3131,180 @@ class NettyWebSocketClientTest {
         } catch (final InterruptedException e) {
             testServer.interrupt();
             e.printStackTrace();
+        } finally {
+            try {
+                testServer.join();
+            } catch (final InterruptedException e) {
+                testServer.interrupt();
+            }
+        }
+    }
+
+    @Test
+    void testOnSendPayloadFromOnCloseFrameCallback() {
+        final CountDownLatch webSocketClosedSignal = new CountDownLatch(2);
+        final CountDownLatch isServerUpSignal = new CountDownLatch(1);
+        final CountDownLatch allPayloadIsReceived = new CountDownLatch(3);
+
+        final BaseTestWebSocketServer testServer = new BaseTestWebSocketServer(PORT, isServerUpSignal) {
+
+            @Override
+            void communicateWithClient() throws IOException, InterruptedException {
+                readAndProcessFrame();
+            }
+
+            @Override
+            void processFrame(final boolean isLastFragment, final int opcode, final ByteArea data,
+                    final long startIndex, final long length) throws IOException, InterruptedException {
+
+                final StringBuilder receivedMessage = new StringBuilder();
+                switch (opcode) {
+                    case PING_FRAME:
+                        allPayloadIsReceived.countDown();
+
+                        closeWSConnection(NORMAL_CLOSURE_STATUS_CODE,
+                                byteArea.srcString(NORMAL_CLOSURE_MESSAGE), 0, byteArea.length());
+
+                        readAndProcessFrame();
+                        break;
+
+                    case BINARY_FRAME:
+                        receivedMessage.setLength(0);
+                        for (long i = startIndex; i < startIndex + length; i++) {
+                            receivedMessage.append((char) data.getByte(i));
+                        }
+
+                        assertEquals(CLIENT_BINARY_MESSAGE, receivedMessage.toString());
+
+                        allPayloadIsReceived.countDown();
+                        readAndProcessFrame();
+                        break;
+
+                    case TEXT_FRAME:
+                        receivedMessage.setLength(0);
+                        for (long i = startIndex; i < startIndex + length; i++) {
+                            receivedMessage.append((char) data.getByte(i));
+                        }
+
+                        assertEquals(CLIENT_TEXT_MESSAGE, receivedMessage.toString());
+
+                        allPayloadIsReceived.countDown();
+                        readAndProcessFrame();
+                        break;
+
+                    case CONNECTION_CLOSE_FRAME:
+                        final int statusCode = ((int) data.getByte(0) << 8) | (data.getByte(1) & 255);
+
+                        assertEquals(NORMAL_CLOSURE_STATUS_CODE, statusCode);
+
+                        receivedMessage.setLength(0);
+                        for (long i = startIndex + BYTES_IN_STATUS_CODE; i < startIndex + length; i++) {
+                            receivedMessage.append((char) data.getByte(i));
+                        }
+
+                        assertEquals(NORMAL_CLOSURE_MESSAGE, receivedMessage.toString());
+
+                        webSocketClosedSignal.countDown();
+                        break;
+
+                    default:
+                        throw new IllegalStateException("Unexpected frame");
+                }
+            }
+        };
+
+        final WebSocketListenerEvents expectedEvents = new WebSocketListenerEvents()
+                .addOnBeforeOpen()
+                .addOnOpened(WEB_SOCKET_PATH, null)
+                .addOnCloseFrame(charArea.srcString(NORMAL_CLOSURE_MESSAGE),
+                        ZERO_START_INDEX, charArea.length(), NORMAL_CLOSURE_STATUS_CODE)
+                .addOnClosed(WEB_SOCKET_PATH, null);
+
+        final WebSocketListenerEvents receivedEvents = new WebSocketListenerEvents();
+
+        final WebSocketListener listener = new WebSocketListener() {
+
+            WebSocket webSocket;
+
+            @Override
+            public void onBeforeOpen(final WebSocketHandShaker handShaker) {
+                receivedEvents.addOnBeforeOpen();
+            }
+
+            @Override
+            public void onOpened(final WebSocket webSocket) {
+                receivedEvents.addOnOpened(webSocket.path(), webSocket.query());
+                this.webSocket = webSocket;
+                webSocket.sendPing(); //signal for the server to initiate websocket close handshake
+            }
+
+            @Override
+            public void onPing(final ByteArea message, final long startIndex, final long length) {
+                receivedEvents.addOnPing(message, startIndex, length);
+            }
+
+            @Override
+            public void onPong(final ByteArea message, final long startIndex, final long length) {
+                receivedEvents.addOnPong(message, startIndex, length);
+            }
+
+            @Override
+            public void onBinaryFrame(final ByteArea message, final long startIndex, final long length,
+                    final boolean isFinalFragment) {
+                receivedEvents.addOnBinaryFrame(message, startIndex, length, isFinalFragment);
+            }
+
+            @Override
+            public void onTextFrame(final CharArea message, final long startIndex, final long length,
+                    final boolean isFinalFragment) {
+                receivedEvents.addOnTextFrame(message, startIndex, length, isFinalFragment);
+            }
+
+            @Override
+            public void onCloseFrame(final CharArea message, final long startIndex, final long length,
+                    final int statusCode) {
+                receivedEvents.addOnCloseFrame(message, startIndex, length, statusCode);
+
+                webSocket.sendText(charArea.srcString(CLIENT_TEXT_MESSAGE), ZERO_START_INDEX,
+                        charArea.length());
+                webSocket.sendBinary(byteArea.srcString(CLIENT_BINARY_MESSAGE), ZERO_START_INDEX, byteArea.length());
+            }
+
+            @Override
+            public void onListenerError(final Throwable error) {
+                receivedEvents.addOnListenerError(error);
+            }
+
+            @Override
+            public void onClosed(final WebSocket webSocket) {
+                receivedEvents.addOnClosed(webSocket.path(), webSocket.query());
+                webSocketClosedSignal.countDown();
+            }
+
+            @Override
+            public void onClosedByError(final WebSocket webSocket, final AbstractWebSocketClientException error) {
+                receivedEvents.addOnClosedByError(webSocket.path(), webSocket.query(), error);
+                webSocketClosedSignal.countDown();
+            }
+        };
+
+        try (NettyWebSocketClient client = NettyWebSocketClient.builder()
+                .withReconnectTimeout(DEFAULT_RECONNECT_TIMEOUT_MS)
+                .withNoReconnect()
+                .withReadTimeout(DEFAULT_READ_TIMEOUT_MS)
+                .withLogger(testLogger)
+                .build("localhost", PORT)) {
+
+            testServer.start();
+            isServerUpSignal.await();
+
+            client.openConnection(WEB_SOCKET_PATH, null, listener);
+            webSocketClosedSignal.await();
+            allPayloadIsReceived.await();
+
+            assertEquals(expectedEvents, receivedEvents);
+        } catch (final InterruptedException e) {
+            testServer.interrupt();
         } finally {
             try {
                 testServer.join();

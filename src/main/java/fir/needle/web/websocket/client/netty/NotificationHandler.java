@@ -50,8 +50,6 @@ import io.netty.handler.codec.http.websocketx.WebSocketHandshakeException;
 import io.netty.handler.timeout.ReadTimeoutException;
 
 class NotificationHandler extends SimpleChannelInboundHandler<Object> {
-    private static final int ABNORMAL_CLOSURE = 1006;
-    private static final int NORMAL_CLOSURE = 1000;
     private static final int ZERO_START_INDEX = 0;
     private static final int STATUS_CODE_BYTES = 2;
     private static final int EMPTY_STATUS_CODE = -1;
@@ -422,7 +420,26 @@ class NotificationHandler extends SimpleChannelInboundHandler<Object> {
         closeFrameTextSize = readableBytes;
         wasCloseFrameReceived = true;
 
-        listener.onCloseFrame(closeFrameText, ZERO_START_INDEX + STATUS_CODE_BYTES,
-                readableBytes - STATUS_CODE_BYTES, closeFrameStatusCode);
+        try {
+            listener.onCloseFrame(closeFrameText, ZERO_START_INDEX + STATUS_CODE_BYTES,
+                    readableBytes - STATUS_CODE_BYTES, closeFrameStatusCode);
+        } catch (final Exception | AssertionError e) {
+            logger.trace("Error while onCloseFrame notification", e);
+
+            try {
+                listener.onListenerError(e);
+            } catch (final Exception | AssertionError er) {
+                logger.error("Error while onListenerError notification", er);
+            }
+        }
+
+        if (webSocket.isClosed()) {
+            return;
+        }
+
+        webSocket.sendCloseFrame(closeFrameStatusCode, closeFrameText, ZERO_START_INDEX + STATUS_CODE_BYTES,
+                readableBytes - STATUS_CODE_BYTES);
+
+        ctx.channel().close();
     }
 }
