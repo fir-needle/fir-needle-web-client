@@ -211,7 +211,7 @@ class HttpResponseListenerEvents {
         }
     }
 
-    private final class OnHeader {
+    private static final class OnHeader {
         private final CharSequence key;
         private final CharSequence value;
 

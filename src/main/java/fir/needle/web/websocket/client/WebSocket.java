@@ -49,9 +49,15 @@ public interface WebSocket extends Closeable {
 
     void sendPong(ByteArea message, long startIndex, long length);
 
-    void close(int statusCode, String message, int closeTimeoutMs);
+    void sendClose(int statusCode);
 
-    void close(int statusCode, CharArea message, long startIndex, long length, int closeTimeoutMs);
+    void sendClose(int statusCode, String message);
+
+    void sendClose(int statusCode, CharArea message, long startIndex, long length);
+
+    void disconnect();
+
+    void close(int closeTimeoutMs);
 
     String path();
 

@@ -37,7 +37,6 @@ import fir.needle.web.websocket.client.WebSocketListener;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
-import io.netty.channel.ChannelFutureListener;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.websocketx.*;
 import io.netty.util.concurrent.EventExecutor;
@@ -49,8 +48,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 class NettyWebSocket implements WebSocket, WebSocketHandShaker {
     private static final int DEFAULT_RCV = 0;
     private static final boolean LAST_FRAME = true;
-    private static final int NORMAL_CLOSURE_STATUS_CODE = 1000;
-    private static final String NORMAL_CLOSURE_MESSAGE = "Normal closure";
 
     final HttpHeaders handshakeHeaders;
     final WebSocketListener listener;
@@ -84,7 +81,7 @@ class NettyWebSocket implements WebSocket, WebSocketHandShaker {
         this.logger = client.logger;
 
         this.url = (client.sslContext == null ? "ws" : "wss") + "://" + client.host + ':' + client.port + path +
-                           (query == null ? "" : '?' + query);
+                (query == null ? "" : '?' + query);
 
         this.attemptsToReconnectLimit = client.numberOfReconnectAttempts;
         this.attemptsToReconnectLeft = client.numberOfReconnectAttempts;
@@ -298,6 +295,69 @@ class NettyWebSocket implements WebSocket, WebSocketHandShaker {
     }
 
     @Override
+    public void sendClose(final int statusCode) {
+        if (logger.isTraceEnabled()) {
+            logger.trace(
+                    getClass().getSimpleName() + ".sendClose for " + this.url() + " in the channel " +
+                            channel.id() + " and in the thread " + Thread.currentThread());
+
+        }
+
+        if (isClosed.get()) {
+            throw new IllegalStateException("Is closed");
+        }
+
+        channel.writeAndFlush(new CloseWebSocketFrame(LAST_FRAME, statusCode));
+    }
+
+    @Override
+    public void sendClose(final int statusCode, final String message) {
+        if (logger.isTraceEnabled()) {
+            logger.trace(
+                    getClass().getSimpleName() + ".sendClose for " + this.url() + " in the channel " +
+                            channel.id() + " and in the thread " + Thread.currentThread());
+
+        }
+
+        if (isClosed.get()) {
+            throw new IllegalStateException("Is closed");
+        }
+
+        final CharSequenceToCharArea stringToCharArea = new CharSequenceToCharArea(message);
+        channel.writeAndFlush(new CloseWebSocketFrame(LAST_FRAME, statusCode, msgToBytes(statusCode, stringToCharArea,
+                0, stringToCharArea.length())));
+    }
+
+    @Override
+    public void sendClose(final int statusCode, final CharArea message, final long startIndex, final long length) {
+        if (logger.isTraceEnabled()) {
+            logger.trace(
+                    getClass().getSimpleName() + ".sendClose for " + this.url() + " in the channel " +
+                            channel.id() + " and in the thread " + Thread.currentThread());
+
+        }
+
+        if (isClosed.get()) {
+            throw new IllegalStateException("Is closed");
+        }
+
+        channel.writeAndFlush(new CloseWebSocketFrame(LAST_FRAME, statusCode, msgToBytes(statusCode, message,
+                startIndex, length)));
+    }
+
+    @Override
+    public void disconnect() {
+        if (logger.isTraceEnabled()) {
+            logger.trace(
+                    getClass().getSimpleName() + ".disconnect for " + this.url() + " in the channel " +
+                            channel.id() + " and in the thread " + Thread.currentThread());
+
+        }
+
+        channel.close();
+    }
+
+    @Override
     public Future<VoidResult> closeAsync() {
         if (logger.isTraceEnabled()) {
             logger.trace(
@@ -307,8 +367,7 @@ class NettyWebSocket implements WebSocket, WebSocketHandShaker {
 
         for (final EventExecutor eventExecutor : client.eventLoopGroup) {
             if (eventExecutor.inEventLoop()) {
-                close(NORMAL_CLOSURE_STATUS_CODE, NORMAL_CLOSURE_MESSAGE,
-                        NettyWebSocketClient.DEFAULT_CLOSE_TIMEOUT_MS);
+                close(NettyWebSocketClient.DEFAULT_CLOSE_TIMEOUT_MS);
                 return NoWaitFuture.INSTANCE;
             }
         }
@@ -317,9 +376,7 @@ class NettyWebSocket implements WebSocket, WebSocketHandShaker {
             logger.trace(getClass().getSimpleName() + ".closeAsync was called not from eventLoop thread ");
         }
 
-        client.eventLoopGroup.execute(() -> close(NORMAL_CLOSURE_STATUS_CODE, NORMAL_CLOSURE_MESSAGE,
-                NettyWebSocketClient.DEFAULT_CLOSE_TIMEOUT_MS));
-
+        client.eventLoopGroup.execute(() -> close(NettyWebSocketClient.DEFAULT_CLOSE_TIMEOUT_MS));
 
         return new Future<VoidResult>() {
             @Override
@@ -354,15 +411,7 @@ class NettyWebSocket implements WebSocket, WebSocketHandShaker {
     }
 
     @Override
-    public void close(final int statusCode, final String reasonText, final int closeTimeoutMs) {
-        final CharSequenceToCharArea stringToCharArea = new CharSequenceToCharArea(reasonText);
-        close(statusCode, stringToCharArea, 0, stringToCharArea.length(), closeTimeoutMs);
-    }
-
-    @Override
-    public synchronized void close(final int statusCode, final CharArea message, final long startIndex,
-            final long length, final int closeTimeoutMs) {
-
+    public synchronized void close(final int closeTimeoutMs) {
         if (logger.isTraceEnabled()) {
             logger.trace(
                     getClass().getSimpleName() + ".close for " + this.url() + " in the channel " +
@@ -377,18 +426,11 @@ class NettyWebSocket implements WebSocket, WebSocketHandShaker {
             return;
         }
 
-        channel.writeAndFlush(new CloseWebSocketFrame(LAST_FRAME, statusCode, msgToBytes(statusCode, message,
-                startIndex, length)))
-                .addListener((ChannelFutureListener) future -> {
-                    final Channel futureChannel = future.channel();
-                    if (!future.isSuccess()) {
-                        channel.close();
-                        return;
-                    }
-
-                    futureChannel.eventLoop().schedule((Runnable) futureChannel::close,
-                            closeTimeoutMs, TimeUnit.MILLISECONDS);
-                });
+        channel.eventLoop().schedule(() -> {
+            if (!channel.closeFuture().isSuccess()) {
+                channel.close();
+            }
+        }, closeTimeoutMs, TimeUnit.MILLISECONDS);
     }
 
     @Override
@@ -450,7 +492,7 @@ class NettyWebSocket implements WebSocket, WebSocketHandShaker {
         if (isClosed.get() || attemptsToReconnectLimit == NettyWebSocketClient.NO_RECONNECT) {
             if (logger.isTraceEnabled()) {
                 logger.trace(getClass().getSimpleName() + ".reconnect reconnect is not scheduled as client has " +
-                                     "NO_RECONNECT property");
+                        "NO_RECONNECT property");
             }
 
             confirmCloseIsDone();
@@ -478,7 +520,7 @@ class NettyWebSocket implements WebSocket, WebSocketHandShaker {
     void confirmCloseIsDone() {
         if (logger.isTraceEnabled()) {
             logger.trace(getClass().getSimpleName() + ".confirmCloseIsDone verified WebSocket close" +
-                                 " in the thread " + Thread.currentThread());
+                    " in the thread " + Thread.currentThread());
         }
 
         isCloseDone.set(true);
@@ -491,7 +533,7 @@ class NettyWebSocket implements WebSocket, WebSocketHandShaker {
     void confirmWsIsOpened() {
         if (logger.isTraceEnabled()) {
             logger.trace(getClass().getSimpleName() + ".confirmWsIsOpened verified WebSocket is opened" +
-                                 " in the thread " + Thread.currentThread());
+                    " in the thread " + Thread.currentThread());
         }
 
         isCloseDone.set(false);
