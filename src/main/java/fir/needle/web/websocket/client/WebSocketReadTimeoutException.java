@@ -2,8 +2,6 @@ package fir.needle.web.websocket.client;
 
 public class WebSocketReadTimeoutException extends AbstractWebSocketClientException {
     public WebSocketReadTimeoutException() {
-
-
         super();
     }
 
